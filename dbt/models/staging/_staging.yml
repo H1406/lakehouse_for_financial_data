@@ -1,0 +1,65 @@
+version: 2
+
+models:
+  - name: stg_prices_eod
+    description: Typed EOD prices, one row per ticker and trading day.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, trade_date]}
+    columns:
+      - name: ticker
+        tests: [not_null]
+      - name: trade_date
+        tests: [not_null]
+      - name: adj_close
+        description: Split- and dividend-adjusted close (yfinance `Adj Close`); the series used for returns.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: false}
+  - name: stg_financial_facts
+    description: XBRL facts with derived period_type (instant/duration) and duration_days.
+    columns:
+      - name: cik
+        tests: [not_null]
+      - name: concept
+        tests: [not_null]
+      - name: filed_date
+        tests: [not_null]
+  - name: stg_crypto_bars_1m
+    description: 1-minute crypto bars; `symbol` renamed to `ticker` to match the universe.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, minute]}
+    columns:
+      - name: close
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: false}
+  - name: stg_equity_bars_1m
+    description: Delayed (>= 10 min) 1-minute equity bars from the yfinance stream, regular session only.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, minute]}
+    columns:
+      - name: close
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, inclusive: false}
+      - name: delay_seconds
+        description: published_at - bar end; the feed's effective delay (>= 600 s by design).
+  - name: stg_universe
+    description: The ticker universe (seed). Single source of truth for tickers, CIKs and sectors.
+    columns:
+      - name: ticker
+        tests: [unique, not_null]
+      - name: sector
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["Information Technology", "Consumer Discretionary", "Communication Services",
+                         "Financials", "Energy", "Health Care", "Consumer Staples", "Crypto"]
+      - name: asset_class
+        tests:
+          - accepted_values:
+              arguments: {values: [equity, crypto]}

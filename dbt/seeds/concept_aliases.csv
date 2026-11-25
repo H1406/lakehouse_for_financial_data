@@ -1,0 +1,13 @@
+concept,unit,metric,priority,period_type
+Revenues,USD,revenue,1,duration
+RevenueFromContractWithCustomerExcludingAssessedTax,USD,revenue,2,duration
+SalesRevenueNet,USD,revenue,3,duration
+RevenuesNetOfInterestExpense,USD,revenue,4,duration
+NetIncomeLoss,USD,net_income,1,duration
+ProfitLoss,USD,net_income,2,duration
+OperatingIncomeLoss,USD,operating_income,1,duration
+Assets,USD,total_assets,1,instant
+Liabilities,USD,total_liabilities,1,instant
+StockholdersEquity,USD,stockholders_equity,1,instant
+StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest,USD,stockholders_equity,2,instant
+EarningsPerShareDiluted,USD/shares,eps_diluted,1,duration

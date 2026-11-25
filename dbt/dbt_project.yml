@@ -1,0 +1,30 @@
+name: lakehouse
+version: "1.0.0"
+profile: lakehouse
+config-version: 2
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  lakehouse:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  lakehouse:
+    +schema: staging
+    universe:
+      +column_types: {ticker: text, cik: text, name: text, sector: text, asset_class: text, prior_ciks: text}
+    concept_aliases:
+      +column_types: {concept: text, unit: text, metric: text, priority: integer, period_type: text}

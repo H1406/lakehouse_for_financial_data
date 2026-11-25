@@ -1,0 +1,105 @@
+version: 2
+
+models:
+  - name: dim_company
+    description: One row per instrument in the universe (12 US large caps, 3 crypto pairs).
+    columns:
+      - name: ticker
+        tests: [unique, not_null]
+
+  - name: fct_rolling_volatility
+    description: >
+      Annualized rolling volatility per ticker and trading day, plus a z-score of vol_20d against its
+      trailing 252 trading days. Incremental (merge): rewrites the last 90 days, reading 500 days of input.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, trade_date]}
+    columns:
+      - name: ticker
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_company'), field: ticker}
+      - name: vol_20d
+        description: stdev of the last 20 daily log returns x sqrt(252). Null until 20 returns exist.
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0}
+      - name: vol_60d
+        description: stdev of the last 60 daily log returns x sqrt(252).
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0}
+      - name: vol_20d_zscore
+        description: (vol_20d - mean) / stdev over the trailing 252 trading days; null with < 126 values.
+
+  - name: fct_drawdown
+    description: Drawdown from the running maximum of adj_close, and the worst drawdown to date.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, trade_date]}
+    columns:
+      - name: drawdown
+        description: adj_close / running max - 1 (0 at a new high, negative below it).
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: -1, max_value: 0}
+
+  - name: fct_correlation_60d
+    description: Rolling 60-trading-day Pearson correlation of daily log returns for each ticker pair.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker_a, ticker_b, trade_date]}
+    columns:
+      - name: corr_60d
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: -1.000001, max_value: 1.000001}
+
+  - name: fct_fundamentals_asof
+    description: >
+      Each trading day with the latest fundamentals whose filed_date <= trade_date (point-in-time, no
+      look-ahead). Columns are null before a company's first filing in range.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, trade_date]}
+    columns:
+      - name: ticker
+        tests:
+          - relationships:
+              arguments: {to: ref('dim_company'), field: ticker}
+
+  - name: fct_intraday_volatility
+    description: >
+      60-minute rolling volatility of 1-minute log returns: crypto annualized x sqrt(525600), equities
+      (delayed feed) x sqrt(98280), with equity windows reset each New York session.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, minute]}
+    columns:
+      - name: vol_60m
+        tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0}
+
+  - name: mart_fact_sheet_inputs
+    description: One row per ticker x fiscal period with financials, changes, ratios and period risk.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, fiscal_year, fiscal_period]}
+    columns:
+      - name: ticker
+        tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_company'), field: ticker}
+      - name: fiscal_period
+        tests:
+          - accepted_values:
+              arguments: {values: [Q1, Q2, Q3, FY]}
+      - name: sector
+        tests:
+          - accepted_values:
+              arguments:
+                values: ["Information Technology", "Consumer Discretionary", "Communication Services",
+                         "Financials", "Energy", "Health Care", "Consumer Staples"]

@@ -1,0 +1,21 @@
+lakehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('PG_HOST', 'postgres') }}"
+      port: 5432
+      user: dbt
+      password: "{{ env_var('DBT_PASSWORD') }}"
+      dbname: warehouse
+      schema: staging
+      threads: 4
+    ci:  # seed-sized database in the GitHub Actions Postgres service container
+      type: postgres
+      host: "{{ env_var('PG_HOST', 'localhost') }}"
+      port: 5432
+      user: dbt
+      password: "{{ env_var('DBT_PASSWORD', 'dbt') }}"
+      dbname: warehouse
+      schema: staging
+      threads: 4

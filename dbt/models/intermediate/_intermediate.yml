@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: int_daily_returns
+    description: Daily log returns, ln(adj_close / previous adj_close), per ticker. First day per ticker is null.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, trade_date]}
+  - name: int_intraday_returns_1m
+    description: >
+      1-minute log returns from 1m bar closes for crypto pairs (24/7) and equities (delayed yfinance feed).
+      Equity returns never span the overnight gap: the first bar of each New York session has a null return.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, minute]}
+    columns:
+      - name: asset_class
+        tests:
+          - accepted_values:
+              arguments: {values: [equity, crypto]}
+  - name: int_fundamentals_quarterly
+    description: >
+      Key financials per ticker and fiscal period (Q1-Q3, FY), from the latest filing for that period
+      (across all of the company's CIKs, see prior_ciks in the universe seed).
+      Concepts are mapped to metrics through the concept_aliases seed (lowest priority number wins).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [ticker, fiscal_year, fiscal_period]}
+    columns:
+      - name: fiscal_period
+        tests:
+          - accepted_values:
+              arguments: {values: [Q1, Q2, Q3, FY]}
+      - name: filed_date
+        tests: [not_null]
+      - name: has_restatement
+        description: True if any metric for this period had different values across filings (e.g. a 10-Q/A).

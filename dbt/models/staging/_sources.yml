@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: lake_silver
+    description: Copies of the Iceberg Silver tables, upserted by key from the copy_silver_to_pg tasks.
+    schema: lake_silver
+    tables:
+      - name: prices_eod
+        description: One row per ticker and trading day (yfinance daily; OHLC split-adjusted, adj_close also dividend-adjusted).
+        loaded_at_field: _updated_at
+        freshness:
+          # error_after is 74 h, not 50 h, so a normal Fri 23:00 -> Mon 23:00 weekend gap does not page.
+          warn_after: {count: 26, period: hour}
+          error_after: {count: 74, period: hour}
+      - name: financial_facts
+        description: One row per XBRL fact per filing (us-gaap taxonomy, period_end >= 2019).
+        # No freshness: rows change only when a company files (quarterly), so _updated_at age is not a health signal.
+      - name: equity_bars_1m
+        description: Delayed 1-minute equity bars (yfinance, >= 10 min delay) written by the stream job.
+        # No freshness: the feed is silent outside US market hours, so age alone would page every night.
+      - name: crypto_bars_1m
+        description: 1-minute OHLCV bars per crypto pair from the streaming job.
+        loaded_at_field: minute
+        freshness:
+          warn_after: {count: 30, period: minute}
+          error_after: {count: 120, period: minute}
