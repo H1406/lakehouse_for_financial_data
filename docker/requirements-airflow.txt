@@ -1,0 +1,10 @@
+# Versions not listed here are pinned by the Airflow 3.3.2 constraints file.
+pyspark==4.0.5
+yfinance==1.8.0
+pyiceberg[pyarrow]==0.12.0
+pydantic
+pydantic-settings
+psycopg[binary]
+requests
+tenacity
+pytest

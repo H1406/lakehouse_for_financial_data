@@ -1,0 +1,175 @@
+name: lakehouse
+
+# Profiles: core services have no profile; `stream` adds Redpanda + producer + Spark stream job.
+# `make up-core` = core only; `make up` = core + stream.
+
+x-s3-env: &s3-env
+  AWS_ACCESS_KEY_ID: ${S3_ACCESS_KEY}
+  AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
+  AWS_REGION: ${S3_REGION}
+
+x-app-env: &app-env
+  <<: *s3-env
+  S3_ENDPOINT: http://seaweedfs:8333
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY}
+  S3_SECRET_KEY: ${S3_SECRET_KEY}
+  S3_REGION: ${S3_REGION}
+  ICEBERG_REST_URI: http://iceberg-rest:8181
+  PG_HOST: postgres
+  ETL_WRITER_PASSWORD: ${ETL_WRITER_PASSWORD}
+  DBT_PASSWORD: ${DBT_PASSWORD}
+  SEC_USER_AGENT: ${SEC_USER_AGENT:-}
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  KAFKA_BOOTSTRAP: redpanda:9092
+  PYTHONPATH: /opt/lakehouse/src:/opt/lakehouse
+
+services:
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.55
+    command: server -ip.bind=0.0.0.0 -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json -master.volumeSizeLimitMB=1024 -volume.max=0
+    ports: ["8333:8333"]
+    volumes:
+      - seaweed-data:/data
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9333/cluster/status >/dev/null"]
+      interval: 5s
+      retries: 30
+
+  iceberg-rest:
+    build: {context: .., dockerfile: docker/iceberg-rest.Dockerfile}
+    image: lakehouse-iceberg-rest:local
+    environment:
+      <<: *s3-env
+      # JdbcCatalog state lives in Postgres (survives `down && up`, handles concurrent commits).
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg_catalog
+      CATALOG_JDBC_USER: iceberg
+      CATALOG_JDBC_PASSWORD: ${ICEBERG_CATALOG_PASSWORD}
+      CATALOG_WAREHOUSE: s3://lake/warehouse
+      CATALOG_IO__IMPL: org.apache.iceberg.aws.s3.S3FileIO
+      CATALOG_S3_ENDPOINT: http://seaweedfs:8333
+      CATALOG_S3_PATH__STYLE__ACCESS: "true"
+    ports: ["8181:8181"]
+    depends_on:
+      seaweedfs: {condition: service_healthy}
+      postgres: {condition: service_healthy}
+
+  postgres:
+    image: pgvector/pgvector:0.8.7-pg16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ICEBERG_CATALOG_PASSWORD: ${ICEBERG_CATALOG_PASSWORD}
+      ETL_WRITER_PASSWORD: ${ETL_WRITER_PASSWORD}
+      DBT_PASSWORD: ${DBT_PASSWORD}
+      GRAFANA_RO_PASSWORD: ${GRAFANA_RO_PASSWORD}
+      AGENT_RO_PASSWORD: ${AGENT_RO_PASSWORD}
+      AGENT_RW_PASSWORD: ${AGENT_RW_PASSWORD}
+    ports: ["5432:5432"]
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d warehouse"]
+      interval: 5s
+      retries: 30
+
+  airflow:
+    build: {context: .., dockerfile: docker/airflow.Dockerfile}
+    image: lakehouse-airflow:local
+    command: standalone
+    environment:
+      <<: *app-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/lakehouse/dags
+      AIRFLOW__CORE__PARALLELISM: "8"
+      # Laptop simplification: every UI user is admin. Production uses a real auth manager.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+      SPARK_DRIVER_MEMORY: 2g
+    ports: ["8080:8080"]
+    volumes:
+      - ../src:/opt/lakehouse/src
+      - ../dags:/opt/lakehouse/dags
+      - ../spark_jobs:/opt/lakehouse/spark_jobs
+      - ../scripts:/opt/lakehouse/scripts
+      - ../dbt:/opt/lakehouse/dbt
+      - ../tests:/opt/lakehouse/tests
+      - ../data:/opt/lakehouse/data
+    depends_on:
+      postgres: {condition: service_healthy}
+      iceberg-rest: {condition: service_started}
+
+  data-browser:  # read-only local web GUI over Postgres, Iceberg and the bucket (scripts/data_browser.py)
+    image: lakehouse-airflow:local
+    command: ["python", "/opt/lakehouse/scripts/data_browser.py"]
+    environment:
+      <<: *app-env
+    ports: ["127.0.0.1:8501:8501"]  # localhost only: the browser has no auth
+    volumes:
+      - ../src:/opt/lakehouse/src
+      - ../scripts:/opt/lakehouse/scripts
+      - ../data:/opt/lakehouse/data:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+      iceberg-rest: {condition: service_started}
+
+  redpanda:
+    profiles: [stream]
+    image: redpandadata/redpanda:v26.3.1
+    command:
+      - redpanda start --mode dev-container --smp 1 --memory 1G --overprovisioned
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://redpanda:9092
+    ports: ["9092:9092"]
+    volumes: [redpanda-data:/var/lib/redpanda/data]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 5s
+      retries: 30
+
+  producer:
+    profiles: [stream]
+    build: {context: .., dockerfile: docker/producer.Dockerfile}
+    image: lakehouse-producer:local
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      CRYPTO_SYMBOLS: btcusdt,ethusdt,solusdt
+    restart: unless-stopped
+    depends_on:
+      redpanda: {condition: service_healthy}
+
+  equity-producer:
+    profiles: [stream]
+    image: lakehouse-producer:local
+    command: ["python", "-u", "/app/equity_producer.py"]
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      QUOTE_DELAY_MINUTES: ${QUOTE_DELAY_MINUTES:-10}  # free-tier style delay; raise it to simulate a slower feed
+      POLL_SECONDS: "60"
+      STARTUP_PERIOD: 5d
+    volumes:
+      - ../dbt/seeds/universe.csv:/app/universe.csv:ro
+    restart: unless-stopped
+    depends_on:
+      redpanda: {condition: service_healthy}
+      producer: {condition: service_started}  # same image; built by the producer service
+
+  spark-stream:
+    profiles: [stream]
+    build: {context: .., dockerfile: docker/spark-stream.Dockerfile}
+    image: lakehouse-spark-stream:local
+    environment:
+      <<: *app-env
+    volumes:
+      - ../src:/opt/lakehouse/src
+      - ../spark_jobs:/opt/lakehouse/spark_jobs
+    restart: unless-stopped
+    depends_on:
+      redpanda: {condition: service_healthy}
+      iceberg-rest: {condition: service_started}
+
+volumes:
+  seaweed-data:
+  pg-data:
+  redpanda-data:
