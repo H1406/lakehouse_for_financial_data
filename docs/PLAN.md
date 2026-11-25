@@ -34,7 +34,7 @@ Build a small, realistic lakehouse that a MoMo interviewer would recognize as th
 ```
  SOURCES                      INGESTION                     LAKEHOUSE (Iceberg on SeaweedFS S3, REST catalog)
  ────────                     ─────────                     ───────────────────────────────────────────────
- Tiingo EOD prices (CSV/JSON) ─┐
+ yfinance EOD prices (JSON)  ─┐
                                ├─ Airflow batch DAGs ──────> bronze.prices_eod_raw
  SEC EDGAR companyfacts (JSON) ┘  (validate, quarantine,     bronze.sec_companyfacts_raw
                                    watermark, idempotent)    bronze.quarantine
@@ -98,9 +98,13 @@ Verify each version on day 1 and record the exact pins in `docs/VERSIONS.md`. Ve
 
 | Source | Endpoint | Format | Cadence | Limits and gotchas |
 |---|---|---|---|---|
-| Tiingo EOD prices | `https://api.tiingo.com/tiingo/daily/{ticker}/prices?startDate=&endDate=&format=csv` | **CSV** (JSON also possible) | Daily after US close (~22:00 UTC) | Free account needed, token in header. Hourly and daily request caps: check your account page. History goes back decades, so a 5-year backfill is fine. Personal-use terms. |
+| Yahoo Finance via `yfinance` (EOD) | `yf.Ticker(t).history(start, end, interval="1d", auto_adjust=False, actions=True)` | DataFrame → staged as **JSON records** | Daily after US close (~22:00 UTC) | No key. Unofficial Yahoo API: throttles with `YFRateLimitError`, so retry with backoff; one request per ticker per run. OHLC are split-adjusted, `Adj Close` adds dividends, `Stock Splits` is 0.0 on normal days. Personal-use terms. |
+| Yahoo Finance via `yfinance` (delayed intraday) | `history(period, interval="1m", prepost=False)` polled every 60 s by `streaming/equity_producer.py` | **JSON events** on topic `equity_bars_1m` | Continuous during US market hours, released **≥ 10 min late** (`QUOTE_DELAY_MINUTES`) | Simulates a free-tier delayed feed (like TradingView without a real-time subscription). Yahoo keeps days of 1m history, so a restarted producer refills its own gap. |
+| _(old row, replaced)_ | | | | | Hourly and daily request caps: check your account page. History goes back decades, so a 5-year backfill is fine. Personal-use terms. |
 | SEC EDGAR | `https://data.sec.gov/api/xbrl/companyfacts/CIK{10-digit}.json`; ticker → CIK from `https://www.sec.gov/files/company_tickers.json` | **Nested JSON** (XBRL facts) | Weekly check; new data only after a filing | No key. **Must send a descriptive `User-Agent` with your email.** Keep to ≤ 10 requests/second. Concept names vary by company (e.g. `Revenues` vs `RevenueFromContractWithCustomerExcludingAssessedTax`), so map aliases. Amendments (`10-Q/A`) restate values. |
 | Binance trades | `wss://stream.binance.com:9443/ws/{symbol}@trade` (or the market-data-only `data-stream.binance.vision`) | **JSON events** | Continuous | No key. Connections drop after 24 hours, so reconnect with backoff. If blocked in your region, use Coinbase Exchange's public `matches` channel. |
+
+**Changed 2026-11-25:** Tiingo was replaced by yfinance (no key), and a delayed intraday equity stream was added. See DECISIONS.md.
 
 **Universe:** 12 US large caps across sectors (e.g. AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, V, XOM, JNJ, WMT, KO) plus 3 crypto pairs (BTCUSDT, ETHUSDT, SOLUSDT). Store the list in the dbt seed `seeds/universe.csv` (ticker, cik, name, sector, asset_class) and read it everywhere from there.
 
@@ -171,9 +175,9 @@ Error messages are **scrubbed** before storing: mask quoted literals, tokens and
 
 | DAG | Schedule (UTC) | Tasks |
 |---|---|---|
-| `prices_eod_daily` | `0 23 * * 1-5` | `extract_tiingo` (per ticker, dynamic task mapping) → `validate_and_land_bronze` → `reconcile_source_bronze` → `spark_bronze_to_silver_prices` → `reconcile_bronze_silver` → `copy_silver_to_pg` → emits Asset `silver_prices` |
+| `prices_eod_daily` | `0 23 * * 1-5` | `extract_prices` (yfinance, per ticker, dynamic task mapping) → `validate_and_land_bronze` → `reconcile_source_bronze` → `spark_bronze_to_silver_prices` → `reconcile_bronze_silver` → `copy_silver_to_pg` → emits Asset `silver_prices` |
 | `sec_facts_weekly` | `0 2 * * 6` | `extract_edgar` (per CIK, skip if `submissions` shows no new filing since watermark) → land Bronze → reconcile → `spark_bronze_to_silver_facts` → reconcile → copy → Asset `silver_facts` |
-| `crypto_silver_15m` | every 15 min | `spark_dedup_trades` → `copy_bars_to_pg` → `check_stream_health` (fails if no events in last 5 min) |
+| `stream_silver_15m` | every 15 min | `spark_dedup_trades` → `copy_bars_to_pg` → `check_stream_health` (crypto; fails if no events in last 5 min); `copy_equity_bars_to_pg` |
 | `dbt_build` | Asset-triggered by `silver_prices` / `silver_facts`, plus hourly for crypto | `dbt source freshness` → `dbt build` → `publish_dbt_results` (parse `run_results.json` into `ops`) |
 | `fact_sheets` | after `dbt_build` | `render_fact_sheets` → `embed_changed_chunks` |
 | `iceberg_maintenance` | daily 03:00 | `rewrite_data_files` on streaming tables, `expire_snapshots` (keep 7 days), `remove_orphan_files` |
@@ -183,11 +187,13 @@ Error messages are **scrubbed** before storing: mask quoted literals, tokens and
 
 ### 6.2 Streaming
 - **Producer** (`streaming/producer.py`, own container): WebSocket → Redpanda topic `crypto_trades` (6 partitions, key = symbol), reconnect with backoff, `acks=all`, idempotent producer.
-- **Spark job** (`spark_jobs/stream_trades.py`, own container, `restart: unless-stopped`):
+- **Delayed equity producer** (`streaming/equity_producer.py`, own container): polls yfinance 1-minute bars for the 12 equities every 60 s and publishes a bar to topic `equity_bars_1m` (6 partitions, key = ticker) only once it is complete **and** at least `QUOTE_DELAY_MINUTES` (default 10) old, like a free-tier feed. On start it re-reads `STARTUP_PERIOD` (5 d) to refill any gap. Re-published bars are absorbed downstream.
+- **Spark job** (`spark_jobs/stream_market.py`, own container, `restart: unless-stopped`):
   - `readStream` from Kafka with `startingOffsets=earliest` the first time, then from the checkpoint.
   - Parse with an explicit schema. Bad records go to quarantine via `foreachBatch`.
   - Query A: raw trades → `bronze.crypto_trades` (append, trigger 30 s).
   - Query B: `withWatermark("trade_time", "2 minutes")` + 1-minute tumbling window → `silver.crypto_bars_1m` (append mode).
+  - Query C: delayed equity bars → `bronze.equity_bars_1m` (append) + `MERGE` into `silver.equity_bars_1m` on `(ticker, minute)`, in `foreachBatch`.
   - `foreachBatch` metrics → `ops.stream_metrics`. Count late events as records whose `trade_time` is older than the current watermark.
   - Checkpoints live under `s3://lake/checkpoints/<query>`.
 - **Restart test:** kill the container mid-stream, restart, and verify trade-count continuity by minute with no duplicate `trade_id`s.
@@ -232,7 +238,7 @@ models/
   staging/       stg_prices_eod, stg_financial_facts, stg_crypto_bars_1m, stg_universe (seed)
   intermediate/  int_daily_returns            -- log returns with lag(), split-adjusted
                  int_fundamentals_quarterly   -- pivot concepts with alias mapping, latest filing per period
-                 int_crypto_returns_1m
+                 int_intraday_returns_1m      -- crypto + delayed equity 1m returns (equity resets each NY session)
   marts/         dim_company
                  fct_rolling_volatility       -- 20d / 60d stdev × sqrt(252), z-score vs trailing 1y
                  fct_drawdown                 -- running max, drawdown, max drawdown
@@ -296,7 +302,7 @@ Route alerts to a webhook (Slack, Teams or Discord, whichever you have). Each al
 
 | Fault | How it's injected | Expected diagnosis |
 |---|---|---|
-| `api_500` | A mock server returns 500 for Tiingo | Upstream API outage → retry later (runbook: API failure) |
+| `api_500` | Yahoo is unreachable or returns 500 (e.g. a failing proxy in front of yfinance) | Upstream API outage → retry later (runbook: API failure) |
 | `schema_change` | Rename a CSV column in a fixture response | Source schema drift → quarantine spike → update parser and contract |
 | `duplicate_batch` | Land the same Bronze partition twice, bypassing overwrite | Duplicate load → reconciliation duplicates → rerun with overwrite |
 | `stream_stop` | Stop the producer container | Stream stalled at the source, not in Spark → restart the producer |
@@ -325,11 +331,11 @@ Route alerts to a webhook (Slack, Teams or Discord, whichever you have). Each al
 ├── src/lakehouse/
 │   ├── config.py               # pydantic-settings, reads env
 │   ├── ops/                    # @instrumented decorator, reconciliation helpers, scrubber
-│   ├── ingestion/              # tiingo.py, edgar.py, contracts.py (pydantic), bronze_writer.py
+│   ├── ingestion/              # yahoo.py, edgar.py, contracts.py (pydantic), bronze_writer.py
 │   ├── iceberg/                # catalog.py (PyIceberg), table definitions
 │   └── docs_gen/               # fact sheet rendering + embedding
-├── streaming/producer.py
-├── spark_jobs/                 # stream_trades.py, bronze_to_silver_*.py, copy_silver_to_pg.py, maintenance.py, common.py
+├── streaming/                  # producer.py (Binance), equity_producer.py (delayed yfinance bars)
+├── spark_jobs/                 # stream_market.py, bronze_to_silver_*.py, copy_silver_to_pg.py, maintenance.py, common.py
 ├── dags/
 ├── dbt/
 ├── agents/                     # qa/, triage/, eval/
@@ -364,8 +370,8 @@ Each day ends with a commit, an updated `docs/PROGRESS.md`, and (when relevant) 
 | Day | Deliverables | Acceptance criteria |
 |---|---|---|
 | **1 · Wed 25 Nov: Foundation** | Repo layout, Compose (SeaweedFS, REST catalog with persisted SQLite, Redpanda, Postgres + pgvector, Airflow standalone, Grafana); custom Airflow image with JDK 17 + pyspark + baked JARs; `make init`; `ops` schema and roles; `VERSIONS.md`; recorded API samples in `tests/fixtures` | PyIceberg creates a table → Spark appends → PyIceberg reads it back; the catalog survives `docker compose down && up`; one real call per source succeeds |
-| **2 · Thu 26 Nov: Batch to Bronze** | Tiingo and EDGAR extractors (retry, backoff, rate limit, User-Agent); pydantic contracts; quarantine; watermarks; `@instrumented`; `prices_eod_daily` and `sec_facts_weekly` DAGs up to Bronze + source reconciliation; 5-year backfill | Running the same logical date twice leaves Bronze counts unchanged; a malformed fixture row lands in quarantine; `ops.pipeline_run` and `ops.reconciliation` rows exist |
-| **3 · Fri 27 Nov: Streaming** | Producer → Redpanda; Spark streaming queries A (Bronze trades) and B (1m bars with watermark); `ops.stream_metrics`; `crypto_silver_15m` DAG; compaction job | Kill and restart the stream: no gaps and no duplicate `trade_id`s by minute; late events counted |
+| **2 · Thu 26 Nov: Batch to Bronze** | yfinance and EDGAR extractors (retry, backoff, rate limit, User-Agent); pydantic contracts; quarantine; watermarks; `@instrumented`; `prices_eod_daily` and `sec_facts_weekly` DAGs up to Bronze + source reconciliation; 5-year backfill | Running the same logical date twice leaves Bronze counts unchanged; a malformed fixture row lands in quarantine; `ops.pipeline_run` and `ops.reconciliation` rows exist |
+| **3 · Fri 27 Nov: Streaming** | Producer → Redpanda; Spark streaming queries A (Bronze trades) and B (1m bars with watermark); delayed yfinance equity feed (query C); `ops.stream_metrics`; `stream_silver_15m` DAG; compaction job | Kill and restart the stream: no gaps and no duplicate `trade_id`s by minute; late events counted |
 | **4 · Sat 28 Nov: Silver + Spark tuning** | `bronze_to_silver_prices` and `_facts` with `MERGE INTO`; Bronze → Silver reconciliation; `copy_silver_to_pg`; scaled perf dataset; `PERFORMANCE.md` | Silver populated for all sources; each run has reconciliation rows; PERFORMANCE.md shows baseline vs tuned with at least 3 measured changes |
 | **5 · Sun 29 Nov: dbt + Grafana** | Full dbt project with tests, freshness, docs and `METRICS.md`; `dbt_build` DAG triggered by Assets; dbt results into `ops`; Grafana dashboard + 6 alert rules provisioned | One end-to-end run goes from API to marts; `dbt build` green; at least one alert shown firing (screenshot) |
 | **6 · Mon 30 Nov: AI agents** | Fact sheets + incremental embedding; QA agent on pgvector hybrid search + eval; triage agent with 5 tools; 4 runbooks; `inject_fault.py`; (stretch) NL-SQL tool and PII separation | Triage notes correct for ≥ 3 of 4 faults; QA agent answers with citations; metrics recorded |
@@ -383,7 +389,7 @@ Each day ends with a commit, an updated `docs/PROGRESS.md`, and (when relevant) 
 - [ ] Compose stack up; all services healthy
 - [ ] Iceberg round trip PyIceberg <-> Spark; catalog persists across restart
 - [ ] Postgres: databases, schemas, roles, ops tables
-- [ ] Recorded fixtures for Tiingo, EDGAR, Binance
+- [ ] Recorded fixtures for yfinance, EDGAR, Binance
 - [ ] VERSIONS.md pinned
 ## Day 2 Batch → Bronze
 - [ ] Contracts + quarantine
