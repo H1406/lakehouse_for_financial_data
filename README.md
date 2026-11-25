@@ -16,6 +16,8 @@ yfinance 1m ──> equity-producer ─┴─> Redpanda ─> Spark Structured St
 ops schema: pipeline_run · watermark · reconciliation · stream_metrics · incident · dbt_result
 ```
 
+**How every component works, with links to the code: [docs/COMPONENTS.md](docs/COMPONENTS.md)**
+
 Full spec: [docs/PLAN.md](docs/PLAN.md) · status: [docs/PROGRESS.md](docs/PROGRESS.md) ·
 why: [docs/DECISIONS.md](docs/DECISIONS.md) · pins: [docs/VERSIONS.md](docs/VERSIONS.md) ·
 metrics: [docs/METRICS.md](docs/METRICS.md)
