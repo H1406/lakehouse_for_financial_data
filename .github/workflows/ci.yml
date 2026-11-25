@@ -1,0 +1,41 @@
+name: ci
+on: [push, pull_request]
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: "17"}
+      - run: pip install -e '.[dev]'
+      - run: ruff check src spark_jobs dags scripts streaming tests
+      - run: pytest -q tests/unit   # no network, no Docker; recorded fixtures only
+
+  dbt:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg16
+        env: {POSTGRES_PASSWORD: postgres, POSTGRES_DB: warehouse}
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+    env:
+      PGPASSWORD: postgres
+      PG_HOST: localhost
+      DBT_PASSWORD: dbt
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install dbt-core==1.12.7 dbt-postgres==1.11.0
+      - name: Create roles, schemas and lake_silver tables
+        run: >
+          psql -h localhost -U postgres -d warehouse -v ON_ERROR_STOP=1
+          -v etl_writer_pw=etl_writer -v dbt_pw=dbt -v grafana_ro_pw=x -v agent_ro_pw=x -v agent_rw_pw=x
+          -f infra/postgres/init/sql/warehouse.sql
+      - name: dbt build on seed-sized (empty source) data
+        working-directory: dbt
+        run: dbt deps && dbt build --target ci --profiles-dir .
