@@ -62,3 +62,53 @@ Each entry: the decision, the alternatives, and why. "Laptop simplification" mar
 
 - **Laptop simplification:** `AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True` (no login). Production uses a real auth manager.
 - **`dbt_build` is scheduled by `AssetOrTimeSchedule`**: it runs when `silver_prices` or `silver_facts` is updated, or hourly (for crypto bars). No sensors are used.
+
+## Agents (2026-11-26)
+
+- **Two agents, one loop.** The incident-triage agent (on-call) and the financial QA agent (analyst) share `agents/core/loop.py`, the DeepSeek client and the guardrails, and differ only in prompt and tools. The NL-SQL tool belongs to the QA agent rather than being a third agent: it adds a capability, not a new decision loop.
+- **Own agent loop instead of LangGraph.** You asked for the loop to be built, and about 170 lines of explicit reason → tool → observe is easier to explain and test (`tests/unit/test_agent_loop.py` uses a scripted fake LLM) than a graph framework. The plan named LangGraph; this replaces it.
+- **DeepSeek over plain `requests`** (`agents/core/llm.py`): one endpoint, OpenAI-compatible tool calls, thinking mode on. A documented API rule shapes the loop: with `tools` present, every assistant `reasoning_content` must be sent back in later requests (the API answers 400 otherwise), so `_assistant_message` keeps it.
+- **Guardrails** (`Guardrails`):
+  - caps on steps, tool calls, wall-clock seconds and tokens
+  - an identical (tool, arguments) call runs at most once; repeats are *blocked*, and the model is told to reuse the result
+  - after N blocked calls the run stops
+  - tool output is truncated
+  - when any limit trips, one last call with `tool_choice="none"` forces a final answer
+  - every result reports `stopped_by`
+  - tools are read-only, and every run is logged to `agent.run_log`
+  Infinite loops are therefore bounded twice: by the repeat detector and by the step cap.
+- **Grounding check for QA:** cited fact-sheet ids are compared with the ids the tools actually returned in that run. Ungrounded citations are reported, never trusted.
+- **NL-SQL is guarded in depth.** sqlglot parses the query: exactly one statement, it must be a query, no DML/DDL nodes anywhere (including inside a CTE), only allowlisted `marts` tables, no `pg_*`/`dblink`/`set_config`. The query is wrapped in an outer LIMIT and executed as `agent_ro` in a read-only transaction with a 5 s timeout. Each layer works on its own; the role alone would already block writes.
+- **Separate `agents` container.** torch and sentence-transformers would conflict with Airflow's constraints and add about 1 GB to every task. Airflow only *calls* the agents service (`fact_sheets` DAG → `POST /fact-sheets/refresh`). The embedding model is baked into the image (`HF_HUB_OFFLINE=1`).
+- **Local embeddings (`all-MiniLM-L6-v2`, 384 dims)** because DeepSeek has no embeddings endpoint. They are normalized, so cosine distance = 1 − dot product, with an HNSW index.
+- **One chunk per fact-sheet section, prefixed with the document identity** ("NVDA-2027-Q2 · NVIDIA Corp. · FY2027 Q2 · Growth"), so a retrieved chunk makes sense on its own and carries its citation id.
+- **Hybrid retrieval with RRF (k = 60).** Vector and full-text scores aren't comparable, while ranks are. Full-text uses OR semantics (`websearch_to_tsquery` with "or"), because AND rarely matches a natural question. Measured on 18 labelled questions: recall@5 0.819 (hybrid) vs 0.764 (vector) vs 0.681 (text); MRR 0.701 vs 0.459 vs 0.525.
+- **Incremental embedding by `content_hash`** of the rendered Markdown (no timestamps in the text). An unchanged sheet is never re-embedded. Measured: a re-run embeds 0; the restatement fix re-embedded exactly the 94 sheets whose text changed.
+- **Least privilege for triage:** the agent writes only `agent_diagnosis` and `triage_note_path`, through a column-level `GRANT UPDATE (…)` to `agent_rw`. An integration test proves other columns and DELETE are refused.
+- **Airflow API token:** laptop simplification, because `SIMPLE_AUTH_MANAGER_ALL_ADMINS` issues an admin token without credentials. Production would use a read-only service account. Mapped task logs need `map_index`, and Airflow 3 puts the exception in a structured `error_detail` field, so the log tool reads both.
+
+## Observability (2026-11-26)
+
+- **Grafana alerts as code** (`scripts/build_dashboard.py` → `rules.json`), multi-dimensional where it matters: the volatility rule returns one alert instance per ticker. Alerts go to the agents service webhook, which opens `ops.incident`, so Grafana alerts and Airflow failures feed the same triage path.
+- **The missed-daily-load rule is weekend-aware.** A normal Fri 23:00 → Mon 23:00 gap is 72 h, so the rule returns 0 on Saturday, Sunday and Monday before 23:30.
+- **One open incident per failed DAG run**, enforced by a partial unique index plus `on conflict do nothing`. The first version (`where not exists`) let 3 of 12 mapped tasks failing in the same second each insert a row; a check-then-insert isn't atomic, a constraint is.
+- **Failed runs keep their counts.** An exception can carry `stats` (e.g. `QuarantineRateExceeded`), and `@instrumented` records them on the failed row. Without this, the quarantine-spike alert couldn't see the runs it exists for.
+- **Airflow task logs persist on `data/airflow-logs`, and the container hostname is fixed (`airflow`).** Logs used to vanish on container recreation, and served-log URLs embed the hostname.
+
+## Fixes found by running things for real (2026-11-26)
+
+- **Quarantine-rate check before the Bronze overwrite.** Previously a 100 %-quarantined run (schema drift) replaced its Bronze slice with nothing before failing.
+- **Provisional latest bar.** Yahoo serves the latest daily candle without a close for hours after the US close. A latest-date record with no close is skipped (not quarantined); the next run's 7-day window re-fetches it.
+- **Airflow 3: manual runs have no logical date.** `airflow dags trigger` (and so `make backfill`) failed with `fromisoformat(None)`. Every DAG now uses `common.run_date(dag_run)` / `common.RUN_DATE` = `logical_date or run_after`.
+- **Restatement flag compared different concepts.** `has_restatement` was true for every WMT/KO/XOM period, because the window compared alias concepts of one metric (`Revenues` vs `RevenueFromContract…`). It now partitions by concept and unit; only NVDA FY2020 Q1–Q2 remain flagged.
+- **Maintenance vs the stream.** `CommitFailedException: branch main has changed` when maintenance raced a stream commit, and the run then died with an unrelated `ConnectionRefusedError`. Now: compaction uses `partial-progress.enabled`, each table/procedure is isolated, and the run fails once at the end with a precise list.
+
+## PII (2026-11-26)
+
+- **`subscriber_key = HMAC-SHA256(secret, subscriber_id)`**, not a plain hash: subscriber ids are a small space, and a plain hash could be reversed by enumerating them. Only the notifier, as `pii_admin`, maps keys back to contacts, and it logs only masked emails. `pii` is `revoke all … from public`, and integration tests prove four roles get "permission denied".
+
+## Performance (2026-11-26) — details in PERFORMANCE.md
+
+- **The benchmark harness imports the production job** and starts every variant from the same snapshot (`rollback_to_snapshot`). Medians of 3 passes. CPU-seconds, task counts, shuffle bytes and rewritten records are the primary signals; laptop wall time is noisy.
+- **Merge-on-read is the recommended next change for `silver.financial_facts`.** A copy-on-write MERGE rewrote all 1.54M rows to change 20. It needs the maintenance DAG to rewrite position deletes; that follow-up isn't done yet.
+- **`spread_partitions` stays off by default in production:** real slices are ≤ 13 payloads.

@@ -276,6 +276,8 @@ Route alerts to a webhook (Slack, Teams or Discord, whichever you have). Each al
 
 ## 10. AI layer
 
+**Changed 2026-11-26:** the LLM is DeepSeek (`deepseek-flash`, thinking mode with tool calls), and the agent loop is our own (`agents/core/loop.py`) instead of LangGraph/Flask; see DECISIONS.md.
+
 ### 10.1 Agent-ready fact sheets
 - One Markdown file per ticker × fiscal quarter in `data/fact_sheets/{ticker}/{fy}-{fp}.md`, rendered with Jinja from `mart_fact_sheet_inputs`.
   - Sections: company, period, filing date and accession number, key financials and QoQ/YoY change, margin and leverage ratios, volatility and drawdown over the quarter, data-quality notes (e.g. restated values).

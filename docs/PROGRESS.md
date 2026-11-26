@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-25 (session 1). An item is ticked only when its PLAN.md §13 acceptance criterion was
+Last updated: 2026-11-26 (session 3). An item is ticked only when its PLAN.md §13 acceptance criterion was
 demonstrated against the running stack. "Built" means the code exists, is unit-tested where possible, and is
 waiting on something named in the note.
 
@@ -38,24 +38,34 @@ waiting on something named in the note.
 - [x] MERGE INTO Silver for prices, facts, trades (+ equity bars in the stream)
 - [x] Bronze→Silver reconciliation for every source
 - [x] Copy to Postgres (incremental on `_updated_at`, upsert) for prices, facts, crypto bars, equity bars
-- [ ] PERFORMANCE.md with measurements. Out of scope for this stage.
+- [x] PERFORMANCE.md with measurements: 6 variants × 3 passes on a ×10 dataset; ≥ 3 measured changes (pruning, AQE/shuffle sizing, merge-on-read, skew spreading)
 
 ## Day 5 dbt + Grafana
 - [x] Staging / intermediate / marts + tests + freshness. `dbt build` 63/63 green on real data, 0 warnings.
       Bug found and fixed: incremental `fct_rolling_volatility` stayed empty after a first build on empty data (null max).
-- [ ] Asset-triggered dbt DAG; results into ops. The DAG and results publishing work (an earlier freshness failure opened incident #1);
-      the Asset trigger itself has not been observed yet (the runs so far used `dags test`).
-- [ ] Dashboard + 6 alerts. Out of scope for this stage.
+- [x] Asset-triggered dbt DAG; results into ops. Observed under the real scheduler: `prices_eod_daily` → Asset → `dbt_build`
+      (`asset_triggered__…`) → Asset `marts` → `fact_sheets`.
+- [x] Dashboard + 6 alerts (Grafana 13.2.7, provisioned as code). Volatility spike fired on real data (NVDA z = 8.2) →
+      webhook → incident #2. Screenshot: not taken (no headless browser in this setup).
 - Data note: NVDA vol_20d = 127 %, z = 8.2 on 2026-11-24 (Yahoo shows −14 % on 11-20 and +31 % on 11-23). It matches the source;
   worth checking before trusting it as a real event.
 
 ## Day 6 Agents
-- [ ] Fact sheets + incremental embeddings
-- [ ] QA agent + eval metrics
-- [ ] Triage agent + runbooks + 4 fault results. **4 runbooks written** (also cited by DAG error messages).
-- [ ] (stretch) NL-SQL tool, PII separation
+- [x] Fact sheets + incremental embeddings: 370 sheets + 5 runbooks → 2,603 chunks (pgvector HNSW + tsvector GIN);
+      re-embeds only changed `content_hash` (0 on a no-op refresh; 94 after a data fix)
+- [ ] QA agent + eval metrics. Retrieval metrics done (recall@5 0.819 hybrid vs 0.764 / 0.681; MRR 0.701).
+      Agent answers with the live LLM: **pending a DeepSeek API key** (`make eval`).
+- [ ] Triage agent + runbooks + 4 fault results. Agent, 8 read-only tools, 5 runbooks, `inject_fault.py` with all 4 faults
+      done; each produced exactly one real incident (19, 20, 24, 25). Diagnoses: **pending a DeepSeek API key**.
+- [x] (stretch) NL-SQL tool (sqlglot guard + `agent_ro` + read-only + timeout + limit; 16 guard tests) and PII separation
+      (HMAC keys, `pii_admin`-only notifier, 4 roles proven denied)
 
 ## Day 7 Hardening
-- [ ] Tests + CI green. Locally: ruff clean, 24 unit tests pass (0 skipped). The CI workflow has not run on GitHub yet.
-- [ ] README + screenshots
-- [ ] CV numbers collected
+- [ ] Tests + CI green. Locally: ruff clean, 55 unit + 10 integration tests pass. CI on GitHub: runs once this branch is pushed.
+- [ ] README + screenshots: README updated; screenshots not taken (no headless browser here)
+- [x] CV numbers collected: docs/RESULTS.md
+
+## Open items
+- DeepSeek key → `make eval` (QA answers + triage on incidents 19, 20, 24, 25; bonus real incidents 6, 18).
+- Merge-on-read for `silver.financial_facts` + rewriting position deletes in maintenance (PERFORMANCE.md).
+- Fresh-clone timing test (`make build up init backfill` < 10 min): not run; it needs the running stack stopped.

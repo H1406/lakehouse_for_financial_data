@@ -1,0 +1,708 @@
+{
+ "vector": {
+  "precision@5": 0.189,
+  "recall@5": 0.764,
+  "mrr": 0.459,
+  "per_question": [
+   {
+    "q": "What was NVIDIA's revenue in fiscal 2027 Q2?",
+    "top5": [
+     "NVDA-2022-Q2",
+     "NVDA-2025-Q2",
+     "NVDA-2027-Q2",
+     "NVDA-2023-Q2",
+     "NVDA-2024-Q2"
+    ],
+    "hits": [
+     "NVDA-2027-Q2"
+    ]
+   },
+   {
+    "q": "How much net income did Apple make in its fiscal year 2026?",
+    "top5": [
+     "AAPL-2026-Q1",
+     "AAPL-2025-Q2",
+     "AAPL-2025-Q1",
+     "AAPL-2023-Q1",
+     "AAPL-2026-FY"
+    ],
+    "hits": [
+     "AAPL-2026-FY"
+    ]
+   },
+   {
+    "q": "What was Microsoft's operating margin in the first quarter of fiscal 2027?",
+    "top5": [
+     "MSFT-2027-Q1",
+     "MSFT-2021-Q2",
+     "MSFT-2026-Q2",
+     "MSFT-2021-Q1",
+     "MSFT-2023-Q2"
+    ],
+    "hits": [
+     "MSFT-2027-Q1"
+    ]
+   },
+   {
+    "q": "How fast did Walmart's revenue grow year over year in fiscal 2026?",
+    "top5": [
+     "WMT-2026-Q2",
+     "WMT-2027-Q2",
+     "WMT-2026-Q1",
+     "WMT-2023-Q1",
+     "WMT-2022-Q1"
+    ],
+    "hits": []
+   },
+   {
+    "q": "What diluted EPS did JPMorgan Chase report for Q3 2026?",
+    "top5": [
+     "JPM-2026-Q3",
+     "JPM-2025-Q3",
+     "JPM-2023-Q3",
+     "JPM-2021-Q3",
+     "JPM-2019-Q3"
+    ],
+    "hits": [
+     "JPM-2026-Q3"
+    ]
+   },
+   {
+    "q": "What is Exxon Mobil's debt to equity ratio in Q3 2026?",
+    "top5": [
+     "XOM-2026-Q3",
+     "XOM-2023-Q1",
+     "XOM-2023-Q3",
+     "XOM-2022-Q3",
+     "XOM-2025-Q3"
+    ],
+    "hits": [
+     "XOM-2026-Q3"
+    ]
+   },
+   {
+    "q": "What was Coca-Cola's net margin in Q2 2026?",
+    "top5": [
+     "KO-2026-Q2",
+     "KO-2022-Q2",
+     "KO-2025-Q2",
+     "KO-2023-Q2",
+     "KO-2024-Q2"
+    ],
+    "hits": [
+     "KO-2026-Q2"
+    ]
+   },
+   {
+    "q": "What were Visa's total assets at the end of fiscal year 2026?",
+    "top5": [
+     "V-2026-FY",
+     "V-2021-FY",
+     "V-2023-FY",
+     "V-2026-Q1",
+     "V-2026-Q2"
+    ],
+    "hits": [
+     "V-2026-FY"
+    ]
+   },
+   {
+    "q": "How deep was Meta Platforms' worst drawdown during fiscal 2022?",
+    "top5": [
+     "META-2021-Q2",
+     "META-2021-Q1",
+     "META-2020-Q1",
+     "META-2022-Q3",
+     "META-2022-FY"
+    ],
+    "hits": [
+     "META-2022-FY"
+    ]
+   },
+   {
+    "q": "Which NVIDIA periods had values restated in a later filing?",
+    "top5": [
+     "NVDA-2020-Q1",
+     "NVDA-2020-Q2",
+     "NVDA-2025-Q1",
+     "NVDA-2027-Q1",
+     "NVDA-2026-Q1"
+    ],
+    "hits": [
+     "NVDA-2020-Q1",
+     "NVDA-2020-Q2"
+    ]
+   },
+   {
+    "q": "Why was Johnson & Johnson's net margin so high in Q3 2023?",
+    "top5": [
+     "JNJ-2020-Q3",
+     "JNJ-2021-Q3",
+     "JNJ-2019-Q3",
+     "JNJ-2023-Q2",
+     "JNJ-2023-Q3"
+    ],
+    "hits": [
+     "JNJ-2023-Q3"
+    ]
+   },
+   {
+    "q": "How did Alphabet's revenue change year over year in Q2 2026?",
+    "top5": [
+     "GOOGL-2022-Q2",
+     "GOOGL-2023-Q2",
+     "GOOGL-2026-Q2",
+     "GOOGL-2024-Q2",
+     "GOOGL-2025-Q2"
+    ],
+    "hits": [
+     "GOOGL-2026-Q2"
+    ]
+   },
+   {
+    "q": "What was Amazon's stockholders' equity at the end of 2025?",
+    "top5": [
+     "AMZN-2025-Q3",
+     "AMZN-2025-Q1",
+     "AMZN-2026-Q3",
+     "AMZN-2023-Q2",
+     "AMZN-2023-Q1"
+    ],
+    "hits": []
+   },
+   {
+    "q": "How volatile was NVIDIA stock during fiscal 2023?",
+    "top5": [
+     "NVDA-2022-Q3",
+     "NVDA-2022-Q1",
+     "NVDA-2023-Q1",
+     "NVDA-2023-Q3",
+     "NVDA-2023-Q2"
+    ],
+    "hits": [
+     "NVDA-2023-Q1",
+     "NVDA-2023-Q3",
+     "NVDA-2023-Q2"
+    ]
+   },
+   {
+    "q": "Compare Apple's and Microsoft's net margin for fiscal year 2026.",
+    "top5": [
+     "AAPL-2025-Q1",
+     "AAPL-2026-Q1",
+     "AAPL-2026-Q3",
+     "AAPL-2023-Q1",
+     "AAPL-2026-Q2"
+    ],
+    "hits": []
+   },
+   {
+    "q": "What revenue did Exxon Mobil report for the first quarter of 2026?",
+    "top5": [
+     "XOM-2022-FY",
+     "XOM-2023-Q1",
+     "XOM-2026-Q1",
+     "XOM-2022-Q2",
+     "XOM-2023-FY"
+    ],
+    "hits": [
+     "XOM-2026-Q1"
+    ]
+   },
+   {
+    "q": "What was Walmart's operating income in Q2 of fiscal 2027?",
+    "top5": [
+     "WMT-2022-Q2",
+     "WMT-2026-Q2",
+     "WMT-2027-Q2",
+     "WMT-2021-Q2",
+     "WMT-2022-Q1"
+    ],
+    "hits": [
+     "WMT-2027-Q2"
+    ]
+   },
+   {
+    "q": "What diluted EPS did Coca-Cola earn in fiscal year 2025?",
+    "top5": [
+     "KO-2025-Q1",
+     "KO-2025-Q2",
+     "KO-2022-Q1",
+     "KO-2021-Q1",
+     "KO-2022-Q2"
+    ],
+    "hits": []
+   }
+  ]
+ },
+ "text": {
+  "precision@5": 0.156,
+  "recall@5": 0.681,
+  "mrr": 0.525,
+  "per_question": [
+   {
+    "q": "What was NVIDIA's revenue in fiscal 2027 Q2?",
+    "top5": [
+     "NVDA-2027-Q2",
+     "NVDA-2023-Q2",
+     "NVDA-2024-Q2",
+     "NVDA-2020-Q2",
+     "NVDA-2025-Q2"
+    ],
+    "hits": [
+     "NVDA-2027-Q2"
+    ]
+   },
+   {
+    "q": "How much net income did Apple make in its fiscal year 2026?",
+    "top5": [
+     "AAPL-2026-FY",
+     "AAPL-2026-Q3",
+     "AAPL-2026-Q2",
+     "GOOGL-2026-Q1",
+     "AAPL-2021-Q1"
+    ],
+    "hits": [
+     "AAPL-2026-FY"
+    ]
+   },
+   {
+    "q": "What was Microsoft's operating margin in the first quarter of fiscal 2027?",
+    "top5": [
+     "MSFT-2025-Q2",
+     "MSFT-2019-FY",
+     "MSFT-2023-Q1",
+     "MSFT-2025-Q1",
+     "MSFT-2027-Q1"
+    ],
+    "hits": [
+     "MSFT-2027-Q1"
+    ]
+   },
+   {
+    "q": "How fast did Walmart's revenue grow year over year in fiscal 2026?",
+    "top5": [
+     "WMT-2026-FY",
+     "WMT-2022-Q3",
+     "AAPL-2026-Q3",
+     "V-2026-FY",
+     "WMT-2020-Q3"
+    ],
+    "hits": [
+     "WMT-2026-FY"
+    ]
+   },
+   {
+    "q": "What diluted EPS did JPMorgan Chase report for Q3 2026?",
+    "top5": [
+     "JPM-2026-Q3",
+     "JPM-2019-Q3",
+     "JPM-2020-Q3",
+     "JPM-2021-Q3",
+     "JPM-2022-Q3"
+    ],
+    "hits": [
+     "JPM-2026-Q3"
+    ]
+   },
+   {
+    "q": "What is Exxon Mobil's debt to equity ratio in Q3 2026?",
+    "top5": [
+     "V-2026-Q3",
+     "AMZN-2026-Q3",
+     "JPM-2026-Q3",
+     "AAPL-2026-Q3",
+     "META-2026-Q3"
+    ],
+    "hits": []
+   },
+   {
+    "q": "What was Coca-Cola's net margin in Q2 2026?",
+    "top5": [
+     "KO-2026-Q2",
+     "KO-2020-Q2",
+     "KO-2022-Q2",
+     "KO-2021-Q2",
+     "KO-2024-Q2"
+    ],
+    "hits": [
+     "KO-2026-Q2"
+    ]
+   },
+   {
+    "q": "What were Visa's total assets at the end of fiscal year 2026?",
+    "top5": [
+     "V-2026-Q3",
+     "V-2026-Q2",
+     "V-2026-FY",
+     "AAPL-2026-FY",
+     "GOOGL-2026-Q3"
+    ],
+    "hits": [
+     "V-2026-FY"
+    ]
+   },
+   {
+    "q": "How deep was Meta Platforms' worst drawdown during fiscal 2022?",
+    "top5": [
+     "META-2022-Q1",
+     "META-2022-Q3",
+     "META-2022-Q2",
+     "META-2026-Q3",
+     "META-2026-Q1"
+    ],
+    "hits": []
+   },
+   {
+    "q": "Which NVIDIA periods had values restated in a later filing?",
+    "top5": [
+     "NVDA-2025-Q3",
+     "NVDA-2019-FY",
+     "NVDA-2023-Q2",
+     "NVDA-2025-Q2",
+     "NVDA-2027-Q2"
+    ],
+    "hits": []
+   },
+   {
+    "q": "Why was Johnson & Johnson's net margin so high in Q3 2023?",
+    "top5": [
+     "JNJ-2024-Q3",
+     "JNJ-2019-Q3",
+     "JNJ-2023-Q3",
+     "JNJ-2022-Q3",
+     "JNJ-2021-Q3"
+    ],
+    "hits": [
+     "JNJ-2023-Q3"
+    ]
+   },
+   {
+    "q": "How did Alphabet's revenue change year over year in Q2 2026?",
+    "top5": [
+     "GOOGL-2026-Q2",
+     "V-2026-Q2",
+     "AAPL-2026-Q2",
+     "JNJ-2026-Q2",
+     "GOOGL-2025-Q2"
+    ],
+    "hits": [
+     "GOOGL-2026-Q2"
+    ]
+   },
+   {
+    "q": "What was Amazon's stockholders' equity at the end of 2025?",
+    "top5": [
+     "JNJ-2025-Q1",
+     "AAPL-2025-Q2",
+     "XOM-2025-Q2",
+     "JPM-2025-Q1",
+     "GOOGL-2025-Q2"
+    ],
+    "hits": []
+   },
+   {
+    "q": "How volatile was NVIDIA stock during fiscal 2023?",
+    "top5": [
+     "NVDA-2023-FY",
+     "KO-2023-Q1",
+     "JPM-2023-Q2",
+     "NVDA-2024-Q2",
+     "V-2023-Q3"
+    ],
+    "hits": [
+     "NVDA-2023-FY"
+    ]
+   },
+   {
+    "q": "Compare Apple's and Microsoft's net margin for fiscal year 2026.",
+    "top5": [
+     "MSFT-2026-Q3",
+     "AAPL-2026-Q2",
+     "AAPL-2026-FY",
+     "MSFT-2026-FY",
+     "AAPL-2026-Q3"
+    ],
+    "hits": [
+     "AAPL-2026-FY",
+     "MSFT-2026-FY"
+    ]
+   },
+   {
+    "q": "What revenue did Exxon Mobil report for the first quarter of 2026?",
+    "top5": [
+     "META-2019-Q1",
+     "XOM-2019-FY",
+     "GOOGL-2019-Q1",
+     "JPM-2019-Q1",
+     "JPM-2019-FY"
+    ],
+    "hits": []
+   },
+   {
+    "q": "What was Walmart's operating income in Q2 of fiscal 2027?",
+    "top5": [
+     "WMT-2027-Q2",
+     "WMT-2021-Q2",
+     "WMT-2023-Q2",
+     "WMT-2022-Q2",
+     "WMT-2025-Q2"
+    ],
+    "hits": [
+     "WMT-2027-Q2"
+    ]
+   },
+   {
+    "q": "What diluted EPS did Coca-Cola earn in fiscal year 2025?",
+    "top5": [
+     "KO-2025-Q3",
+     "KO-2025-Q2",
+     "KO-2025-Q1",
+     "KO-2025-FY",
+     "JNJ-2025-Q1"
+    ],
+    "hits": [
+     "KO-2025-FY"
+    ]
+   }
+  ]
+ },
+ "hybrid": {
+  "precision@5": 0.189,
+  "recall@5": 0.819,
+  "mrr": 0.701,
+  "per_question": [
+   {
+    "q": "What was NVIDIA's revenue in fiscal 2027 Q2?",
+    "top5": [
+     "NVDA-2027-Q2",
+     "NVDA-2023-Q2",
+     "NVDA-2025-Q2",
+     "NVDA-2022-Q2",
+     "NVDA-2024-Q2"
+    ],
+    "hits": [
+     "NVDA-2027-Q2"
+    ]
+   },
+   {
+    "q": "How much net income did Apple make in its fiscal year 2026?",
+    "top5": [
+     "AAPL-2026-FY",
+     "AAPL-2026-Q2",
+     "AAPL-2026-Q1",
+     "AAPL-2025-Q1",
+     "AAPL-2023-Q1"
+    ],
+    "hits": [
+     "AAPL-2026-FY"
+    ]
+   },
+   {
+    "q": "What was Microsoft's operating margin in the first quarter of fiscal 2027?",
+    "top5": [
+     "MSFT-2027-Q1",
+     "MSFT-2023-Q1",
+     "MSFT-2021-Q1",
+     "MSFT-2025-Q2",
+     "MSFT-2025-Q1"
+    ],
+    "hits": [
+     "MSFT-2027-Q1"
+    ]
+   },
+   {
+    "q": "How fast did Walmart's revenue grow year over year in fiscal 2026?",
+    "top5": [
+     "WMT-2022-Q3",
+     "WMT-2026-FY",
+     "WMT-2022-Q1",
+     "WMT-2022-Q2",
+     "WMT-2021-Q2"
+    ],
+    "hits": [
+     "WMT-2026-FY"
+    ]
+   },
+   {
+    "q": "What diluted EPS did JPMorgan Chase report for Q3 2026?",
+    "top5": [
+     "JPM-2026-Q3",
+     "JPM-2019-Q3",
+     "JPM-2021-Q3",
+     "JPM-2023-Q3",
+     "JPM-2025-Q3"
+    ],
+    "hits": [
+     "JPM-2026-Q3"
+    ]
+   },
+   {
+    "q": "What is Exxon Mobil's debt to equity ratio in Q3 2026?",
+    "top5": [
+     "XOM-2026-Q3",
+     "V-2026-Q3",
+     "AMZN-2026-Q3",
+     "XOM-2023-Q1",
+     "JPM-2026-Q3"
+    ],
+    "hits": [
+     "XOM-2026-Q3"
+    ]
+   },
+   {
+    "q": "What was Coca-Cola's net margin in Q2 2026?",
+    "top5": [
+     "KO-2026-Q2",
+     "KO-2022-Q2",
+     "KO-2025-Q2",
+     "KO-2021-Q2",
+     "KO-2024-Q2"
+    ],
+    "hits": [
+     "KO-2026-Q2"
+    ]
+   },
+   {
+    "q": "What were Visa's total assets at the end of fiscal year 2026?",
+    "top5": [
+     "V-2026-FY",
+     "V-2026-Q2",
+     "V-2026-Q1",
+     "V-2026-Q3",
+     "META-2026-Q2"
+    ],
+    "hits": [
+     "V-2026-FY"
+    ]
+   },
+   {
+    "q": "How deep was Meta Platforms' worst drawdown during fiscal 2022?",
+    "top5": [
+     "META-2022-Q3",
+     "META-2022-Q1",
+     "META-2022-Q2",
+     "META-2020-Q2",
+     "META-2022-FY"
+    ],
+    "hits": [
+     "META-2022-FY"
+    ]
+   },
+   {
+    "q": "Which NVIDIA periods had values restated in a later filing?",
+    "top5": [
+     "NVDA-2020-Q2",
+     "NVDA-2025-Q3",
+     "NVDA-2025-Q1",
+     "NVDA-2020-Q1",
+     "NVDA-2023-Q1"
+    ],
+    "hits": [
+     "NVDA-2020-Q2",
+     "NVDA-2020-Q1"
+    ]
+   },
+   {
+    "q": "Why was Johnson & Johnson's net margin so high in Q3 2023?",
+    "top5": [
+     "JNJ-2019-Q3",
+     "JNJ-2021-Q3",
+     "JNJ-2023-Q3",
+     "JNJ-2020-Q3",
+     "JNJ-2024-Q3"
+    ],
+    "hits": [
+     "JNJ-2023-Q3"
+    ]
+   },
+   {
+    "q": "How did Alphabet's revenue change year over year in Q2 2026?",
+    "top5": [
+     "GOOGL-2026-Q2",
+     "GOOGL-2024-Q2",
+     "GOOGL-2025-Q2",
+     "GOOGL-2022-Q2",
+     "GOOGL-2023-Q2"
+    ],
+    "hits": [
+     "GOOGL-2026-Q2"
+    ]
+   },
+   {
+    "q": "What was Amazon's stockholders' equity at the end of 2025?",
+    "top5": [
+     "AMZN-2025-Q1",
+     "AMZN-2025-Q3",
+     "AMZN-2025-Q2",
+     "JNJ-2025-Q1",
+     "AAPL-2025-Q2"
+    ],
+    "hits": []
+   },
+   {
+    "q": "How volatile was NVIDIA stock during fiscal 2023?",
+    "top5": [
+     "NVDA-2023-FY",
+     "NVDA-2024-Q2",
+     "NVDA-2024-Q1",
+     "NVDA-2024-Q3",
+     "NVDA-2022-Q3"
+    ],
+    "hits": [
+     "NVDA-2023-FY"
+    ]
+   },
+   {
+    "q": "Compare Apple's and Microsoft's net margin for fiscal year 2026.",
+    "top5": [
+     "AAPL-2026-Q2",
+     "AAPL-2026-Q3",
+     "AAPL-2026-Q1",
+     "AAPL-2026-FY",
+     "AAPL-2025-Q1"
+    ],
+    "hits": [
+     "AAPL-2026-FY"
+    ]
+   },
+   {
+    "q": "What revenue did Exxon Mobil report for the first quarter of 2026?",
+    "top5": [
+     "XOM-2019-Q2",
+     "META-2019-Q1",
+     "XOM-2022-FY",
+     "XOM-2019-FY",
+     "XOM-2023-Q1"
+    ],
+    "hits": []
+   },
+   {
+    "q": "What was Walmart's operating income in Q2 of fiscal 2027?",
+    "top5": [
+     "WMT-2027-Q2",
+     "WMT-2022-Q2",
+     "WMT-2021-Q2",
+     "WMT-2026-Q2",
+     "WMT-2025-Q2"
+    ],
+    "hits": [
+     "WMT-2027-Q2"
+    ]
+   },
+   {
+    "q": "What diluted EPS did Coca-Cola earn in fiscal year 2025?",
+    "top5": [
+     "KO-2025-Q1",
+     "KO-2025-Q2",
+     "KO-2025-FY",
+     "KO-2025-Q3",
+     "KO-2024-FY"
+    ],
+    "hits": [
+     "KO-2025-FY"
+    ]
+   }
+  ]
+ }
+}
