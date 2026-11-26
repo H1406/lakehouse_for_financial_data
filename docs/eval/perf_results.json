@@ -1,0 +1,180 @@
+{
+ "v0_baseline": {
+  "runs": 2,
+  "config": {
+   "all_slices": true,
+   "aqe": "false",
+   "shuffle_partitions": "200",
+   "merge_mode": "copy-on-write",
+   "spread_partitions": 0
+  },
+  "wall_s_median": 51.75,
+  "wall_s_all": [
+   43.3,
+   60.2
+  ],
+  "executor_run_s": 262.6,
+  "tasks": 1679.0,
+  "stages": 20.0,
+  "shuffle_read_mb": 1046.95,
+  "shuffle_write_mb": 1046.95,
+  "spill_mb": 0.0,
+  "max_task_s": 1.9,
+  "rows_read": 2106141,
+  "rows_merged": 1540299,
+  "files_added": "200",
+  "files_removed": "8",
+  "delete_files_added": null,
+  "records_written": "1540299",
+  "read_after_merge_s": 0.4
+ },
+ "v1_prune_slice": {
+  "runs": 2,
+  "config": {
+   "all_slices": false,
+   "aqe": "false",
+   "shuffle_partitions": "200",
+   "merge_mode": "copy-on-write",
+   "spread_partitions": 0
+  },
+  "wall_s_median": 21.5,
+  "wall_s_all": [
+   21.3,
+   21.7
+  ],
+  "executor_run_s": 88.8,
+  "tasks": 1667.0,
+  "stages": 20.0,
+  "shuffle_read_mb": 461.3,
+  "shuffle_write_mb": 461.3,
+  "spill_mb": 0.0,
+  "max_task_s": 1.85,
+  "rows_read": 369741,
+  "rows_merged": 173640,
+  "files_added": "200",
+  "files_removed": "8",
+  "delete_files_added": null,
+  "records_written": "1540299",
+  "read_after_merge_s": 0.55
+ },
+ "v2_aqe": {
+  "runs": 3,
+  "config": {
+   "all_slices": false,
+   "aqe": "true",
+   "shuffle_partitions": "200",
+   "merge_mode": "copy-on-write",
+   "spread_partitions": 0
+  },
+  "wall_s_median": 25.0,
+  "wall_s_all": [
+   25.0,
+   24.9,
+   43.9
+  ],
+  "executor_run_s": 110.5,
+  "tasks": 1243,
+  "stages": 23,
+  "shuffle_read_mb": 461.2,
+  "shuffle_write_mb": 461.2,
+  "spill_mb": 0.0,
+  "max_task_s": 2.0,
+  "rows_read": 369741,
+  "rows_merged": 173640,
+  "files_added": "9",
+  "files_removed": "8",
+  "delete_files_added": null,
+  "records_written": "1540299",
+  "read_after_merge_s": 0.3
+ },
+ "v3_shuffle_sized": {
+  "runs": 3,
+  "config": {
+   "all_slices": false,
+   "aqe": "true",
+   "shuffle_partitions": "16",
+   "merge_mode": "copy-on-write",
+   "spread_partitions": 0
+  },
+  "wall_s_median": 24.2,
+  "wall_s_all": [
+   19.6,
+   30.7,
+   24.2
+  ],
+  "executor_run_s": 90.1,
+  "tasks": 142,
+  "stages": 23,
+  "shuffle_read_mb": 368.7,
+  "shuffle_write_mb": 368.7,
+  "spill_mb": 0.0,
+  "max_task_s": 6.1,
+  "rows_read": 369741,
+  "rows_merged": 173640,
+  "files_added": "11",
+  "files_removed": "8",
+  "delete_files_added": null,
+  "records_written": "1540299",
+  "read_after_merge_s": 0.3
+ },
+ "v4_merge_on_read": {
+  "runs": 3,
+  "config": {
+   "all_slices": false,
+   "aqe": "true",
+   "shuffle_partitions": "16",
+   "merge_mode": "merge-on-read",
+   "spread_partitions": 0
+  },
+  "wall_s_median": 22.9,
+  "wall_s_all": [
+   16.5,
+   22.9,
+   26.5
+  ],
+  "executor_run_s": 66.6,
+  "tasks": 110,
+  "stages": 20,
+  "shuffle_read_mb": 332.2,
+  "shuffle_write_mb": 332.2,
+  "spill_mb": 0.0,
+  "max_task_s": 1.7,
+  "rows_read": 369741,
+  "rows_merged": 173640,
+  "files_added": "1",
+  "files_removed": null,
+  "delete_files_added": "8",
+  "records_written": "20",
+  "read_after_merge_s": 0.3
+ },
+ "v5_spread_skew": {
+  "runs": 3,
+  "config": {
+   "all_slices": false,
+   "aqe": "true",
+   "shuffle_partitions": "16",
+   "merge_mode": "merge-on-read",
+   "spread_partitions": 64
+  },
+  "wall_s_median": 16.0,
+  "wall_s_all": [
+   16.0,
+   16.5,
+   15.8
+  ],
+  "executor_run_s": 67.2,
+  "tasks": 493,
+  "stages": 21,
+  "shuffle_read_mb": 347.9,
+  "shuffle_write_mb": 347.9,
+  "spill_mb": 0.0,
+  "max_task_s": 2.1,
+  "rows_read": 369741,
+  "rows_merged": 173640,
+  "files_added": "1",
+  "files_removed": null,
+  "delete_files_added": "8",
+  "records_written": "20",
+  "read_after_merge_s": 0.3
+ }
+}
