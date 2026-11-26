@@ -6,7 +6,7 @@ from datetime import datetime
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag, task
-from common import DEFAULT_ARGS, SILVER_CRYPTO, spark_submit
+from common import DEFAULT_ARGS, SILVER_CRYPTO, run_date, spark_submit
 
 from lakehouse.ops import connect
 from lakehouse.warehouse_copy import copy_table
@@ -22,17 +22,18 @@ def stream_silver_15m():
     dedup = BashOperator(
         task_id="spark_dedup_trades",
         bash_command=spark_submit("silver_crypto_trades",
-                                  "--until '{{ data_interval_end | ts }}' --run-id '{{ run_id }}'"),
+                                  "--until '{{ (dag_run.data_interval_end or dag_run.run_after) | ts }}' "
+                                  "--run-id '{{ run_id }}'"),
     )
 
     @task(outlets=[SILVER_CRYPTO])
-    def copy_bars_to_pg(ds=None, run_id=None) -> dict:
-        return copy_table(table="crypto_bars_1m", run_id=run_id, logical_date=ds)
+    def copy_bars_to_pg(dag_run=None, run_id=None) -> dict:
+        return copy_table(table="crypto_bars_1m", run_id=run_id, logical_date=run_date(dag_run))
 
     @task
-    def copy_equity_bars_to_pg(ds=None, run_id=None) -> dict:
+    def copy_equity_bars_to_pg(dag_run=None, run_id=None) -> dict:
         # Silver is written by the stream itself (MERGE in foreachBatch); this is only the Postgres copy.
-        return copy_table(table="equity_bars_1m", run_id=run_id, logical_date=ds)
+        return copy_table(table="equity_bars_1m", run_id=run_id, logical_date=run_date(dag_run))
 
     @task(retries=0)
     def check_stream_health() -> int:
