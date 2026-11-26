@@ -34,7 +34,7 @@ jobs:
       - name: Create roles, schemas and lake_silver tables
         run: >
           psql -h localhost -U postgres -d warehouse -v ON_ERROR_STOP=1
-          -v etl_writer_pw=etl_writer -v dbt_pw=dbt -v grafana_ro_pw=x -v agent_ro_pw=x -v agent_rw_pw=x
+          -v etl_writer_pw=etl_writer -v dbt_pw=dbt -v grafana_ro_pw=x -v agent_ro_pw=x -v agent_rw_pw=x -v pii_admin_pw=x
           -f infra/postgres/init/sql/warehouse.sql
       - name: dbt build on seed-sized (empty source) data
         working-directory: dbt
