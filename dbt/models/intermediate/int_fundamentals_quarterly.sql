@@ -4,7 +4,7 @@
 -- period (its latest period_end) is kept. The latest filing per period wins (handles 10-Q/A restatements).
 with facts as (
     select
-        f.cik, f.ticker, f.accession_no, f.form, f.filed_date, f.fiscal_year, f.fiscal_period,
+        f.cik, f.ticker, f.concept, f.unit, f.accession_no, f.form, f.filed_date, f.fiscal_year, f.fiscal_period,
         f.period_start, f.period_end, f.duration_days, f.value,
         a.metric, a.priority, a.period_type
     from {{ ref('stg_financial_facts') }} f
@@ -42,7 +42,9 @@ ranked as (
         ) as rn,
         min(value) over w <> max(value) over w as values_differ
     from sized
-    window w as (partition by ticker, fiscal_year, fiscal_period, metric)
+    -- restatement = the SAME concept reported with different values by different filings. Partitioning by metric
+    -- alone compared different alias concepts (e.g. WMT Revenues vs RevenueFromContract...), flagging every period.
+    window w as (partition by ticker, fiscal_year, fiscal_period, concept, unit)
 ),
 
 chosen as (
