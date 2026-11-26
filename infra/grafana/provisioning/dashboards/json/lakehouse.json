@@ -1,0 +1,437 @@
+{
+ "uid": "lakehouse",
+ "title": "Lakehouse: volatility & pipeline health",
+ "schemaVersion": 41,
+ "time": {
+  "from": "now-1y",
+  "to": "now"
+ },
+ "refresh": "1m",
+ "tags": [
+  "lakehouse"
+ ],
+ "panels": [
+  {
+   "id": 1,
+   "title": "20-day annualized volatility",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select trade_date::timestamp as time, ticker as metric, vol_20d from marts.fct_rolling_volatility where $__timeFilter(trade_date::timestamp) and vol_20d is not null order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 2,
+   "title": "60-day annualized volatility",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 0,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select trade_date::timestamp as time, ticker as metric, vol_60d from marts.fct_rolling_volatility where $__timeFilter(trade_date::timestamp) and vol_60d is not null order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 3,
+   "title": "Volatility regime: weekly average 20d vol (ticker x week)",
+   "type": "status-history",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 8,
+    "w": 24,
+    "h": 9
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select date_trunc('week', trade_date)::timestamp as time, ticker as metric, avg(vol_20d) as vol from marts.fct_rolling_volatility where $__timeFilter(trade_date::timestamp) and vol_20d is not null group by 1, 2 order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit",
+     "color": {
+      "mode": "continuous-GrYlRd"
+     }
+    },
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 4,
+   "title": "Drawdown from running high",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 17,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select trade_date::timestamp as time, ticker as metric, drawdown from marts.fct_drawdown where $__timeFilter(trade_date::timestamp) order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 5,
+   "title": "Latest 20d vol z-score (alert > 3)",
+   "type": "bargauge",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 17,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select ticker, round(vol_20d_zscore::numeric, 2) as z from marts.fct_rolling_volatility where trade_date = (select max(trade_date) from marts.fct_rolling_volatility) and vol_20d_zscore is not null order by z desc",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {
+    "orientation": "horizontal",
+    "displayMode": "basic",
+    "reduceOptions": {
+     "values": true,
+     "calcs": [],
+     "fields": "/^z$/"
+    }
+   }
+  },
+  {
+   "id": 6,
+   "title": "60-day return correlation (latest day)",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 25,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select ticker_a, ticker_b, round(corr_60d::numeric, 2) as corr_60d from marts.fct_correlation_60d where trade_date = (select max(trade_date) from marts.fct_correlation_60d) and corr_60d is not null order by corr_60d desc",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 7,
+   "title": "Intraday 60-minute volatility (crypto 24/7, equities delayed >= 10 min)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 25,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select minute as time, ticker as metric, vol_60m from marts.fct_intraday_volatility where $__timeFilter(minute) and vol_60m is not null order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "percentunit"
+    },
+    "overrides": []
+   },
+   "options": {},
+   "timeFrom": "2d"
+  },
+  {
+   "id": 8,
+   "title": "Pipeline freshness: hours since last successful load",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 33,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select coalesce(source, dag_id) as source, entity, max(finished_at) as last_success, round((extract(epoch from now() - max(finished_at)) / 3600)::numeric, 1) as hours_ago from ops.pipeline_run where status = 'success' group by 1, 2 order by hours_ago desc",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 9,
+   "title": "Reconciliation (last 50 checks)",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 33,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select checked_at, source, entity, layer_from || ' -> ' || layer_to as hop, count_from, count_to, missing, duplicates, status from ops.reconciliation order by checked_at desc limit 50",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {}
+  },
+  {
+   "id": 10,
+   "title": "Stream events per minute",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 41,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select date_trunc('minute', written_at) as time, query_name as metric, sum(events) as events from ops.stream_metrics where $__timeFilter(written_at) group by 1, 2 order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {},
+   "timeFrom": "6h"
+  },
+  {
+   "id": 11,
+   "title": "Stream max event lag (s)",
+   "type": "timeseries",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 12,
+    "y": 41,
+    "w": 12,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select date_trunc('minute', written_at) as time, query_name as metric, max(max_event_lag_seconds) as lag_s from ops.stream_metrics where $__timeFilter(written_at) group by 1, 2 order by 1",
+     "format": "time_series",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {
+     "unit": "s"
+    },
+    "overrides": []
+   },
+   "options": {},
+   "timeFrom": "6h"
+  },
+  {
+   "id": 12,
+   "title": "Latest dbt results (non-pass first)",
+   "type": "table",
+   "datasource": {
+    "type": "grafana-postgresql-datasource",
+    "uid": "warehouse"
+   },
+   "gridPos": {
+    "x": 0,
+    "y": 49,
+    "w": 24,
+    "h": 8
+   },
+   "targets": [
+    {
+     "refId": "A",
+     "datasource": {
+      "type": "grafana-postgresql-datasource",
+      "uid": "warehouse"
+     },
+     "rawSql": "select unique_id, resource_type, status, failures, execution_time_s, generated_at from ops.dbt_result where invocation_id = (select invocation_id from ops.dbt_result order by generated_at desc limit 1) order by (status in ('pass', 'success')), unique_id",
+     "format": "table",
+     "rawQuery": true,
+     "editorMode": "code"
+    }
+   ],
+   "fieldConfig": {
+    "defaults": {},
+    "overrides": []
+   },
+   "options": {}
+  }
+ ]
+}

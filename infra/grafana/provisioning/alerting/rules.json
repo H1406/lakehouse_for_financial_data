@@ -1,0 +1,345 @@
+{
+ "apiVersion": 1,
+ "groups": [
+  {
+   "orgId": 1,
+   "name": "lakehouse",
+   "folder": "Lakehouse",
+   "interval": "1m",
+   "rules": [
+    {
+     "uid": "vol_spike",
+     "title": "Volatility spike",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "info"
+     },
+     "annotations": {
+      "summary": "20d vol z-score > 3 for {{ $labels.ticker }} (business alert)",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/dbt_failure.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select ticker, vol_20d_zscore as z from marts.fct_rolling_volatility where trade_date = (select max(trade_date) from marts.fct_rolling_volatility) and vol_20d_zscore is not null",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            3
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "uid": "missed_daily_load",
+     "title": "Missed daily load",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "high",
+      "dag_id": "prices_eod_daily"
+     },
+     "annotations": {
+      "summary": "No successful prices_eod_daily load for > 30 h",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/api_failure.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select case when extract(isodow from now()) in (6, 7) or (extract(isodow from now()) = 1 and now()::time < '23:30') then 0 else coalesce(extract(epoch from now() - max(finished_at)) / 3600, 999) end as hours from ops.pipeline_run where dag_id = 'prices_eod_daily' and task_id = 'copy_silver_to_pg' and status = 'success'",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            30
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "uid": "stream_stalled",
+     "title": "Stream stalled",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "high"
+     },
+     "annotations": {
+      "summary": "No crypto trades for > 5 minutes",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/stream_stalled.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select coalesce(extract(epoch from now() - max(written_at)) / 60, 9999) as minutes from ops.stream_metrics where query_name = 'bronze_trades' and events > 0",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            5
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "uid": "reconciliation_mismatch",
+     "title": "Reconciliation mismatch",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "high"
+     },
+     "annotations": {
+      "summary": "ops.reconciliation has mismatches in the last 24 h",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/reconciliation_mismatch.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select count(*) as mismatches from ops.reconciliation where status = 'mismatch' and checked_at > now() - interval '24 hours'",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "uid": "dbt_failure",
+     "title": "dbt failure",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "high",
+      "dag_id": "dbt_build"
+     },
+     "annotations": {
+      "summary": "Latest dbt build has failed models or tests",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/dbt_failure.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select count(*) as failed from ops.dbt_result where status in ('error', 'fail') and invocation_id = (select invocation_id from ops.dbt_result order by generated_at desc limit 1)",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "uid": "quarantine_spike",
+     "title": "Quarantine spike",
+     "condition": "C",
+     "for": "0m",
+     "noDataState": "OK",
+     "execErrState": "Error",
+     "labels": {
+      "severity": "medium"
+     },
+     "annotations": {
+      "summary": "A run quarantined > 5 % of its records (source schema drift?)",
+      "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/api_failure.md"
+     },
+     "data": [
+      {
+       "refId": "A",
+       "relativeTimeRange": {
+        "from": 600,
+        "to": 0
+       },
+       "datasourceUid": "warehouse",
+       "model": {
+        "refId": "A",
+        "datasource": {
+         "type": "grafana-postgresql-datasource",
+         "uid": "warehouse"
+        },
+        "rawSql": "select coalesce(max(rows_quarantined::float / nullif(rows_read, 0)), 0) as rate from ops.pipeline_run where started_at > now() - interval '1 hour' and rows_read > 0",
+        "format": "table",
+        "rawQuery": true,
+        "editorMode": "code"
+       }
+      },
+      {
+       "refId": "C",
+       "datasourceUid": "__expr__",
+       "model": {
+        "refId": "C",
+        "type": "threshold",
+        "expression": "A",
+        "conditions": [
+         {
+          "evaluator": {
+           "type": "gt",
+           "params": [
+            0.05
+           ]
+          }
+         }
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

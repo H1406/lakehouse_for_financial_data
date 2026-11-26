@@ -4,6 +4,12 @@ Scope: the crypto stream. The delayed equity feed (`equity_bars`) is legitimatel
 
 **Signals:** `check_stream_health` failed ("no stream events in the last 5 minutes"); no new rows in `ops.stream_metrics`.
 
+## Source or Spark? Read the heartbeats first
+`ops.stream_metrics` gets a 0-event **idle heartbeat** row (`batch_id = -1`) about once a minute per query while Spark
+is alive but Kafka has nothing new:
+- heartbeats continue, no events → **source stalled** (producer stopped, WebSocket blocked); Spark is fine.
+- no rows at all (no events, no heartbeats) → **Spark job down** (container crashed, OOM, catalog errors).
+
 ## Diagnose (source first, then Spark)
 1. Producer: `docker logs --tail 50 lakehouse-producer-1`. Reconnect loops / `websocket error` → Binance side or network. Container not running → it was stopped.
 2. Broker: `docker exec lakehouse-redpanda-1 rpk topic describe crypto_trades -p` — are high watermarks still increasing?

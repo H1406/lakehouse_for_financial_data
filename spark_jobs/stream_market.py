@@ -20,6 +20,7 @@ import psycopg
 from pyspark.sql import DataFrame
 from pyspark.sql import functions as F
 from pyspark.sql import types as T
+from pyspark.sql.streaming import StreamingQueryListener
 
 from lakehouse.config import settings
 from spark_jobs.common import latest_per_key, spark_session
@@ -206,6 +207,36 @@ class EquitySink:
                           parse_errors, stats["lag"], topic=EQUITY_TOPIC)
 
 
+class IdleHeartbeat(StreamingQueryListener):
+    """Liveness signal. When a trigger finds no new Kafka data, Spark emits onQueryIdle; we record a 0-event row
+    (batch_id -1). So in ops.stream_metrics: heartbeats with 0 events = Spark alive, SOURCE silent (producer down,
+    market closed); no rows at all = Spark itself is down. Without this the two failures look identical."""
+
+    def __init__(self) -> None:
+        self.queries: dict[str, tuple[str, str]] = {}  # query id -> (name, topic)
+        self.last: dict[str, float] = {}
+
+    def onQueryStarted(self, event) -> None:  # noqa: N802 - Spark listener API
+        pass
+
+    def onQueryProgress(self, event) -> None:  # noqa: N802
+        pass
+
+    def onQueryTerminated(self, event) -> None:  # noqa: N802
+        pass
+
+    def onQueryIdle(self, event) -> None:  # noqa: N802
+        qid = str(event.id)
+        if qid not in self.queries:
+            return
+        now = datetime.now(timezone.utc).timestamp()
+        if now - self.last.get(qid, 0) < 55:  # at most one heartbeat per query per minute
+            return
+        self.last[qid] = now
+        name, topic = self.queries[qid]
+        write_metrics(-1, name, None, 0, 0, 0, None, topic=topic)
+
+
 def write_metrics(batch_id: int, query: str, window_start, events: int, late: int, errors: int, lag,
                   topic: str = TOPIC) -> None:
     try:  # fail-open: metrics must never stop the stream
@@ -243,14 +274,18 @@ def main() -> None:
             .load()
         )
 
+    heartbeat = IdleHeartbeat()
+    spark.streams.addListener(heartbeat)
     trades = parse(kafka(TOPIC))
-    (trades.writeStream.queryName("bronze_trades").foreachBatch(BronzeSink())
-     .option("checkpointLocation", f"{CHECKPOINTS}/bronze_trades").trigger(processingTime=TRIGGER).start())
+    q_trades = (trades.writeStream.queryName("bronze_trades").foreachBatch(BronzeSink())
+                .option("checkpointLocation", f"{CHECKPOINTS}/bronze_trades").trigger(processingTime=TRIGGER).start())
+    heartbeat.queries[str(q_trades.id)] = ("bronze_trades", TOPIC)
     (to_bars(trades.where("_valid")).writeStream.queryName("bars_1m").format("iceberg").outputMode("append")
      .option("checkpointLocation", f"{CHECKPOINTS}/bars_1m").trigger(processingTime=TRIGGER)
      .toTable("lake.silver.crypto_bars_1m"))
-    (parse_equity(kafka(EQUITY_TOPIC)).writeStream.queryName("equity_bars").foreachBatch(EquitySink())
-     .option("checkpointLocation", f"{CHECKPOINTS}/equity_bars").trigger(processingTime=TRIGGER).start())
+    q_equity = (parse_equity(kafka(EQUITY_TOPIC)).writeStream.queryName("equity_bars").foreachBatch(EquitySink())
+                .option("checkpointLocation", f"{CHECKPOINTS}/equity_bars").trigger(processingTime=TRIGGER).start())
+    heartbeat.queries[str(q_equity.id)] = ("equity_bars", EQUITY_TOPIC)
     spark.streams.awaitAnyTermination()
 
 
