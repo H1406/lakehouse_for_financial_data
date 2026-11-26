@@ -38,3 +38,20 @@ def test_column_drift_quarantines_everything():
 def test_empty():
     assert parse_daily("AAPL", []) == ([], [])
     assert len(YAHOO_DAILY_COLUMNS) == 9
+
+
+def test_provisional_latest_bar_without_close_is_skipped_not_quarantined():
+    rows = daily_fixture()[:3]
+    latest = max(r["Date"] for r in rows)
+    rows = [({**r, "Close": None, "Adj Close": None} if r["Date"] == latest else r) for r in rows]
+    valid, bad = parse_daily("AAPL", rows)
+    assert len(valid) == 2 and not bad
+    assert latest not in {v["trade_date"].isoformat() for v in valid}
+
+
+def test_missing_close_on_an_older_bar_is_still_quarantined():
+    rows = daily_fixture()[:3]
+    oldest = min(r["Date"] for r in rows)
+    rows = [({**r, "Close": None, "Adj Close": None} if r["Date"] == oldest else r) for r in rows]
+    valid, bad = parse_daily("AAPL", rows)
+    assert len(valid) == 2 and len(bad) == 1

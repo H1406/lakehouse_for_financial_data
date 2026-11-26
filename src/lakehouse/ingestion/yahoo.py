@@ -7,6 +7,7 @@ Note: with auto_adjust=False, Open/High/Low/Close are already split-adjusted (no
 """
 
 import json
+import logging
 import math
 from datetime import date, timedelta
 
@@ -19,6 +20,7 @@ from yfinance.exceptions import YFRateLimitError
 from lakehouse.ingestion import http
 from lakehouse.ingestion.contracts import YAHOO_DAILY_COLUMNS, YahooDailyRow
 
+log = logging.getLogger(__name__)
 yf.config.debug.hide_exceptions = False  # raise instead of printing and returning an empty frame
 _limiter = http.RateLimiter(per_second=1)
 
@@ -53,6 +55,15 @@ def parse_daily(ticker: str, records: list[dict]) -> tuple[list[dict], list[dict
     if set(records[0]) != set(YAHOO_DAILY_COLUMNS):
         reason = f"column mismatch: expected {sorted(YAHOO_DAILY_COLUMNS)}, got {sorted(records[0])}"
         return [], [{"entity": ticker, "reason": reason, "_payload": json.dumps(r, sort_keys=True)} for r in records]
+
+    # The most recent daily bar can be provisional: Yahoo serves it with Open/High/Low/Volume but no Close for
+    # hours after the US close (seen 2026-11-26 02:00 UTC for the 11-25 bar). It is not bad data, just not final:
+    # skip it; the next run's 7-day window re-fetches it. A bar that never finalizes shows up in the dbt gap test.
+    latest = max(r["Date"] for r in records)
+    provisional = [r for r in records if r["Date"] == latest and r.get("Close") is None and r.get("Adj Close") is None]
+    if provisional:
+        log.info("%s: skipping provisional %s bar (no close yet)", ticker, latest)
+        records = [r for r in records if r not in provisional]
 
     valid, bad = [], []
     for rec in records:

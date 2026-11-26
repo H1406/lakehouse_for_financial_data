@@ -20,7 +20,9 @@ DAILY_LOOKBACK_DAYS = 7  # refetch the last week each day to pick up late correc
 
 
 class QuarantineRateExceeded(Exception):
-    pass
+    def __init__(self, message: str, stats: dict):
+        super().__init__(message)
+        self.stats = stats  # @instrumented records these on the failed ops.pipeline_run row
 
 
 def _raw_dir(source: str, logical_date: date) -> Path:
@@ -57,16 +59,19 @@ def _parse_price_files(paths: list[str]) -> tuple[list[dict], list[dict]]:
 def _check_quarantine_rate(n_valid: int, n_bad: int) -> None:
     total = n_valid + n_bad
     if total and n_bad / total > MAX_QUARANTINE_RATE:
-        raise QuarantineRateExceeded(f"quarantine rate {n_bad}/{total} exceeds {MAX_QUARANTINE_RATE:.0%}")
+        raise QuarantineRateExceeded(f"quarantine rate {n_bad}/{total} exceeds {MAX_QUARANTINE_RATE:.0%}",
+                                     {"rows_read": total, "rows_written": 0, "rows_quarantined": n_bad})
 
 
 @instrumented(source="yfinance", entity="prices_eod")
 def land_prices_bronze(*, paths: list[str], logical_date: date, run_id: str, source: str) -> dict:
     valid, bad = _parse_price_files(paths)
     write_quarantine(bad, source=source, entity=None, logical_date=logical_date, run_id=run_id)
+    # Check *before* touching Bronze: a 100 %-quarantined run (schema drift) must fail without replacing the
+    # slice with nothing. The rejected rows are already in quarantine, so they stay inspectable.
+    _check_quarantine_rate(len(valid), len(bad))
     written = overwrite_slice(PRICES_TABLE, valid, source=source, logical_date=logical_date,
                               run_id=run_id, payload_col="_raw_line")
-    _check_quarantine_rate(len(valid), len(bad))  # after writing, so rejected rows stay inspectable
     if valid:
         set_watermark(source, "prices_eod", max(r["trade_date"] for r in valid).isoformat())
     return {"rows_read": len(valid) + len(bad), "rows_written": written, "rows_quarantined": len(bad)}
@@ -117,9 +122,9 @@ def land_edgar_bronze(*, fetched: list[dict], logical_date: date, run_id: str, s
     ciks = [f["cik"] for f in fetched]
     for b in bad:
         write_quarantine([b], source=source, entity=b["entity"], logical_date=logical_date, run_id=run_id)
+    _check_quarantine_rate(len(valid), len(bad))  # before overwriting Bronze (see land_prices_bronze)
     written = overwrite_slice(FACTS_TABLE, valid, source=source, logical_date=logical_date, run_id=run_id,
                               payload_col="_payload", cik=ciks)
-    _check_quarantine_rate(len(valid), len(bad))
     for f in fetched:
         if f["cik"] in {v["cik"] for v in valid}:
             set_watermark(source, f"cik:{f['cik']}", f["latest_filing"])
