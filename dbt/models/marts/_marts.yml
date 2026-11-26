@@ -103,3 +103,11 @@ models:
               arguments:
                 values: ["Information Technology", "Consumer Discretionary", "Communication Services",
                          "Financials", "Energy", "Health Care", "Consumer Staples"]
+
+  - name: fct_alert_targets
+    description: >
+      Volatility-spike alert targets for today, one row per subscriber_key x ticker. No PII: the notifier
+      (role pii_admin) maps subscriber_key back to contact details.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments: {combination_of_columns: [subscriber_key, ticker]}

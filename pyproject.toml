@@ -13,7 +13,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest==9.2.0", "ruff==0.17.6", "pyspark==4.0.5", "websockets==16.1.1", "confluent-kafka==2.15.1"]
+dev = ["pytest==9.2.0", "ruff==0.17.6", "pyspark==4.0.5", "websockets==16.1.1", "confluent-kafka==2.15.1",
+       "sqlglot==30.35.0", "jinja2==3.1.6", "pyyaml==6.0.4"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -33,3 +34,5 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.ruff.lint.per-file-ignores]
 # Runs on the Spark image's Python 3.10: keep timezone.utc (no datetime.UTC).
 "spark_jobs/stream_market.py" = ["UP017"]
+# Jinja template text: a line break would change the rendered document.
+"agents/retrieval/documents.py" = ["E501"]

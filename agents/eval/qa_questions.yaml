@@ -1,0 +1,40 @@
+# QA evaluation set: question -> fact-sheet ids that contain the answer (relevance labels for retrieval)
+# and `expect`: strings a correct answer must contain (spot check of the agent's final answer).
+- q: What was NVIDIA's revenue in fiscal 2027 Q2?
+  relevant: [NVDA-2027-Q2]
+  expect: ["96.2"]
+- q: How much net income did Apple make in its fiscal year 2026?
+  relevant: [AAPL-2026-FY]
+- q: What was Microsoft's operating margin in the first quarter of fiscal 2027?
+  relevant: [MSFT-2027-Q1]
+- q: How fast did Walmart's revenue grow year over year in fiscal 2026?
+  relevant: [WMT-2026-FY]
+- q: What diluted EPS did JPMorgan Chase report for Q3 2026?
+  relevant: [JPM-2026-Q3]
+- q: What is Exxon Mobil's debt to equity ratio in Q3 2026?
+  relevant: [XOM-2026-Q3]
+- q: What was Coca-Cola's net margin in Q2 2026?
+  relevant: [KO-2026-Q2]
+- q: What were Visa's total assets at the end of fiscal year 2026?
+  relevant: [V-2026-FY]
+- q: How deep was Meta Platforms' worst drawdown during fiscal 2022?
+  relevant: [META-2022-FY]
+  expect: ["74"]
+- q: Which NVIDIA periods had values restated in a later filing?
+  relevant: [NVDA-2020-Q1, NVDA-2020-Q2]
+- q: Why was Johnson & Johnson's net margin so high in Q3 2023?
+  relevant: [JNJ-2023-Q3]
+- q: How did Alphabet's revenue change year over year in Q2 2026?
+  relevant: [GOOGL-2026-Q2]
+- q: What was Amazon's stockholders' equity at the end of 2025?
+  relevant: [AMZN-2025-FY]
+- q: How volatile was NVIDIA stock during fiscal 2023?
+  relevant: [NVDA-2023-FY, NVDA-2023-Q1, NVDA-2023-Q2, NVDA-2023-Q3]
+- q: Compare Apple's and Microsoft's net margin for fiscal year 2026.
+  relevant: [AAPL-2026-FY, MSFT-2026-FY]
+- q: What revenue did Exxon Mobil report for the first quarter of 2026?
+  relevant: [XOM-2026-Q1]
+- q: What was Walmart's operating income in Q2 of fiscal 2027?
+  relevant: [WMT-2027-Q2]
+- q: What diluted EPS did Coca-Cola earn in fiscal year 2025?
+  relevant: [KO-2025-FY]

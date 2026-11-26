@@ -24,3 +24,5 @@ sources:
         freshness:
           warn_after: {count: 30, period: minute}
           error_after: {count: 120, period: minute}
+      - name: alert_subscriptions
+        description: Which tickers each subscriber follows. Keyed by subscriber_key (HMAC); contains no PII.
