@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: warehouse
+    uid: warehouse
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: grafana_ro          # read-only role: ops + marts only (no lake_silver, no pii)
+    isDefault: true
+    jsonData:
+      database: warehouse
+      sslmode: disable
+      postgresVersion: 1600
+      timeInterval: 1m
+    secureJsonData:
+      password: $GRAFANA_RO_PASSWORD

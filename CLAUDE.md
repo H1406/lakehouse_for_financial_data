@@ -40,9 +40,13 @@ make dbt-build     # dbt source freshness + dbt build
 make test          # ruff + pytest tests/unit (no network, no Docker)
 make test-int      # integration tests; needs `make up-core`
 make lint
-make fault FAULT=api_500|schema_change|duplicate_batch|stream_stop
+make fault FAULT=api_500|schema_change|duplicate_batch|stream_stop   # + make fault-cleanup FAULT=...
 make triage INCIDENT=<id>
-make eval          # QA retrieval metrics + triage fault results
+make ask Q="..."     # financial QA agent
+make eval          # retrieval metrics (no LLM) + QA answers + triage on injected faults (DeepSeek)
+make dashboard     # regenerate Grafana dashboard + alert rules
+make perf          # Spark tuning benchmark (stop the stream first)
+make browse        # data browser on :8501
 ```
 
 dbt runs from `dbt/` with `--profiles-dir .`. Use `--target ci` for the seed-sized CI database.
@@ -56,7 +60,7 @@ dbt runs from `dbt/` with `--profiles-dir .`. Use `--target ci` for the seed-siz
 - `streaming/`: `producer.py` (Binance WebSocket → Redpanda), `equity_producer.py` (delayed yfinance 1m bars → Redpanda)
 - `dags/`: Airflow 3 DAGs (thin: call functions in `src/` or `spark-submit` jobs in `spark_jobs/`)
 - `dbt/`: staging → intermediate → marts, seeds, singular tests
-- `agents/`: `qa/`, `triage/`, `eval/`
+- `agents/`: `core/` (DeepSeek client, agent loop + guardrails, tools, run log), `retrieval/` (fact sheets, embeddings, hybrid search), `qa/` (QA agent + SQL guard), `triage/`, `pii/`, `eval/`, `service.py` (HTTP service: own container)
 - `runbooks/`: Markdown runbooks (also the triage agent's knowledge base)
 - `scripts/`: init, fault injection, perf data scaling, dashboard generation
 - `tests/`: `unit/`, `unit/spark/`, `integration/`, `fixtures/` (recorded API responses)
@@ -133,6 +137,9 @@ dbt runs from `dbt/` with `--profiles-dir .`. Use `--target ci` for the seed-siz
 - **EDGAR** companyfacts can be several MB per company; store the payload once in Bronze and explode in Spark, not in Python. Concept names differ across companies: map them through `dbt/seeds/concept_aliases.csv`.
 - **Airflow 3** standalone mode is fine for the laptop. Its REST API is `/api/v2` (the triage agent needs a token from env).
 - **Small files** from streaming are expected; compaction belongs to the maintenance DAG, not to the stream job.
+- **Airflow 3 manual runs have no logical date** (`ds` is None for `airflow dags trigger` / UI runs). Use `common.run_date(dag_run)` / `common.RUN_DATE`, never `ds`.
+- **Agents:** DeepSeek requires every assistant `reasoning_content` to be sent back when `tools` are present (else HTTP 400). Keep torch/sentence-transformers in the agents image, never in the Airflow image.
+- **Incidents:** at most one open incident per failed DAG run (partial unique index). Mark resolved with `resolved_at` (and `human_verdict`).
 - **RAM:** if containers get OOM-killed, use `make up-core` and stop the stream; set Spark driver memory to 2 GB.
 
 ## Definition of done (for any feature)

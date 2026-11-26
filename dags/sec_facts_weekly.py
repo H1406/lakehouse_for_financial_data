@@ -1,10 +1,10 @@
 """SEC EDGAR companyfacts: weekly. Skips CIKs with no new 10-K/10-Q since their watermark."""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import dag, task
-from common import DEFAULT_ARGS, SILVER_FACTS, spark_submit
+from common import DEFAULT_ARGS, RUN_DATE, SILVER_FACTS, run_date, spark_submit
 
 from lakehouse import universe
 from lakehouse.ingestion import tasks as ing
@@ -24,30 +24,30 @@ def sec_facts_weekly():
                 for cik in [r["cik"], *filter(None, r["prior_ciks"].split(";"))]]
 
     @task(max_active_tis_per_dagrun=2)
-    def extract_edgar(company: dict, ds=None) -> dict | None:
+    def extract_edgar(company: dict, dag_run=None) -> dict | None:
         return ing.extract_edgar(cik=company["cik"], ticker=company["ticker"],
-                                 logical_date=date.fromisoformat(ds), source=SOURCE)
+                                 logical_date=run_date(dag_run), source=SOURCE)
 
     @task
-    def land_bronze(fetched: list, ds=None, run_id=None) -> list:
+    def land_bronze(fetched: list, dag_run=None, run_id=None) -> list:
         fetched = [f for f in fetched if f]
-        ing.land_edgar_bronze(fetched=fetched, logical_date=date.fromisoformat(ds), run_id=run_id, source=SOURCE)
+        ing.land_edgar_bronze(fetched=fetched, logical_date=run_date(dag_run), run_id=run_id, source=SOURCE)
         return fetched
 
     @task
-    def reconcile_source_bronze(fetched: list, ds=None, run_id=None) -> None:
-        ing.reconcile_edgar_source_bronze(fetched=fetched, logical_date=date.fromisoformat(ds), run_id=run_id,
+    def reconcile_source_bronze(fetched: list, dag_run=None, run_id=None) -> None:
+        ing.reconcile_edgar_source_bronze(fetched=fetched, logical_date=run_date(dag_run), run_id=run_id,
                                           source=SOURCE)
 
     to_silver = BashOperator(
         task_id="spark_bronze_to_silver_facts",
         bash_command=spark_submit("bronze_to_silver_facts",
-                                  f"--logical-date {{{{ ds }}}} --run-id '{{{{ run_id }}}}' --source {SOURCE}"),
+                                  "--logical-date " + RUN_DATE + " --run-id '{{ run_id }}' --source " + SOURCE),
     )
 
     @task(outlets=[SILVER_FACTS])
-    def copy_silver_to_pg(ds=None, run_id=None) -> dict:
-        return copy_table(table="financial_facts", run_id=run_id, logical_date=ds)
+    def copy_silver_to_pg(dag_run=None, run_id=None) -> dict:
+        return copy_table(table="financial_facts", run_id=run_id, logical_date=run_date(dag_run))
 
     landed = land_bronze(extract_edgar.expand(company=companies()))
     reconcile_source_bronze(landed) >> to_silver >> copy_silver_to_pg()

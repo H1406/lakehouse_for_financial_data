@@ -2,7 +2,8 @@ COMPOSE := docker compose -f infra/docker-compose.yml --env-file .env
 AIRFLOW := $(COMPOSE) exec -T airflow
 PY := .venv/bin/python
 
-.PHONY: up up-core down build init backfill stream-start stream-stop dbt-build test test-int lint smoke fixtures browse
+.PHONY: up up-core down build init backfill stream-start stream-stop dbt-build test test-int lint smoke fixtures browse \
+	dashboard fault fault-cleanup triage ask eval perf pii
 JAVA_HOME ?= /opt/homebrew/opt/openjdk@17
 
 .env:
@@ -26,7 +27,7 @@ init:
 	  -f /docker-entrypoint-initdb.d/sql/databases.sql'
 	$(COMPOSE) exec -T postgres sh -c 'psql -v ON_ERROR_STOP=1 -U postgres -d warehouse \
 	  -v etl_writer_pw="$$ETL_WRITER_PASSWORD" -v dbt_pw="$$DBT_PASSWORD" -v grafana_ro_pw="$$GRAFANA_RO_PASSWORD" \
-	  -v agent_ro_pw="$$AGENT_RO_PASSWORD" -v agent_rw_pw="$$AGENT_RW_PASSWORD" \
+	  -v agent_ro_pw="$$AGENT_RO_PASSWORD" -v agent_rw_pw="$$AGENT_RW_PASSWORD" -v pii_admin_pw="$$PII_ADMIN_PASSWORD" \
 	  -f /docker-entrypoint-initdb.d/sql/warehouse.sql'
 	$(AIRFLOW) python scripts/init_lake.py
 	$(AIRFLOW) bash -c "cd dbt && dbt deps && dbt seed --full-refresh"  # seeds are tiny; full refresh handles column changes
@@ -64,3 +65,25 @@ test-int:
 
 lint:
 	.venv/bin/ruff check src spark_jobs dags scripts streaming tests
+
+dashboard:  ## regenerate Grafana dashboard + alert rules, then restart Grafana to load them
+	$(PY) scripts/build_dashboard.py && $(COMPOSE) restart grafana
+
+fault:  ## make fault FAULT=api_500|schema_change|duplicate_batch|stream_stop
+	python3 scripts/inject_fault.py $(FAULT)
+
+fault-cleanup:
+	python3 scripts/inject_fault.py $(FAULT) --cleanup
+
+triage:  ## make triage INCIDENT=<id>
+	$(COMPOSE) exec -T agents python -m agents.triage.agent $(INCIDENT)
+
+ask:  ## make ask Q="How volatile was NVDA in fiscal 2023?"
+	$(COMPOSE) exec -T agents python -m agents.qa.agent "$(Q)"
+
+perf:  ## Spark tuning benchmark (docs/PERFORMANCE.md); stop the stream first to free RAM
+	$(AIRFLOW) bash -c "spark-submit --master local[4] --driver-memory 3g scripts/scale_perf_data.py --copies 10 && scripts/run_perf.sh"
+
+eval:  ## retrieval metrics (no LLM) + QA answers + triage on injected faults (needs DEEPSEEK_API_KEY)
+	$(COMPOSE) exec -T agents python -m agents.eval.retrieval_eval
+	$(COMPOSE) exec -T agents python -m agents.eval.agent_eval

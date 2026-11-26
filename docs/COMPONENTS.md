@@ -25,6 +25,10 @@ pinned versions in [VERSIONS.md](VERSIONS.md), and the original spec in [PLAN.md
 14. [Cross-cutting guarantees](#14-cross-cutting-guarantees)
 15. [Measured results so far](#15-measured-results-so-far)
 16. [Known limitations](#16-known-limitations)
+17. [Agents: the shared loop, the QA agent and the triage agent](#17-agents-the-shared-loop-the-qa-agent-and-the-triage-agent)
+18. [Grafana: dashboard and alerts as code](#18-grafana-dashboard-and-alerts-as-code)
+19. [PII separation](#19-pii-separation)
+20. [Fault injection and the performance harness](#20-fault-injection-and-the-performance-harness)
 
 ---
 
@@ -69,15 +73,15 @@ These walkthroughs are the fastest way to understand how the components connect.
 1. **Schedule.** `prices_eod_daily` fires at 23:00 UTC on weekdays ([dags/prices_eod.py#L59](../dags/prices_eod.py#L59)).
    Its logical date `ds` is 2026-11-24.
 2. **Extract.** A mapped task, one per ticker ([dags/prices_eod.py#L53](../dags/prices_eod.py#L53)), calls
-   [`extract_prices`](../src/lakehouse/ingestion/tasks.py#L41). It fetches the deterministic window
-   `[ds − 7 d, ds]` ([`prices_window`](../src/lakehouse/ingestion/tasks.py#L32)) with
-   [`yahoo.fetch_daily`](../src/lakehouse/ingestion/yahoo.py#L40) and writes `data/raw/yfinance/2026-11-24/AAPL.json`.
-3. **Validate and land.** [`land_prices_bronze`](../src/lakehouse/ingestion/tasks.py#L64) parses every file with
-   [`parse_daily`](../src/lakehouse/ingestion/yahoo.py#L49). Each record must pass the pydantic contract
+   [`extract_prices`](../src/lakehouse/ingestion/tasks.py#L43). It fetches the deterministic window
+   `[ds − 7 d, ds]` ([`prices_window`](../src/lakehouse/ingestion/tasks.py#L34)) with
+   [`yahoo.fetch_daily`](../src/lakehouse/ingestion/yahoo.py#L42) and writes `data/raw/yfinance/2026-11-24/AAPL.json`.
+3. **Validate and land.** [`land_prices_bronze`](../src/lakehouse/ingestion/tasks.py#L67) parses every file with
+   [`parse_daily`](../src/lakehouse/ingestion/yahoo.py#L51). Each record must pass the pydantic contract
    [`YahooDailyRow`](../src/lakehouse/ingestion/contracts.py#L11), or it goes to quarantine with a reason. Valid rows
    replace the `(_source='yfinance', _logical_date=2026-11-24)` slice of `bronze.prices_eod_raw` in **one Iceberg
    commit** ([bronze_writer.py#L38-L41](../src/lakehouse/ingestion/bronze_writer.py#L38-L41)).
-4. **Reconcile source → Bronze.** [`reconcile_prices_source_bronze`](../src/lakehouse/ingestion/tasks.py#L76) compares
+4. **Reconcile source → Bronze.** [`reconcile_prices_source_bronze`](../src/lakehouse/ingestion/tasks.py#L81) compares
    the parsed keys with the keys in the Bronze slice and writes one `ops.reconciliation` row.
 5. **Bronze → Silver.** A BashOperator runs `spark-submit spark_jobs/bronze_to_silver_prices.py`. The job keeps the
    latest ingest per `(ticker, trade_date)` and MERGEs it into `silver.prices_eod`, updating only when the payload hash
@@ -116,8 +120,8 @@ bar ([stream_market.py#L99-L100](../spark_jobs/stream_market.py#L99-L100)). Ever
 
 ### 2.4 One XBRL fact (Apple revenue, Q3 FY2026)
 
-`sec_facts_weekly` → [`extract_edgar`](../src/lakehouse/ingestion/tasks.py#L91) checks the `submissions` endpoint and
-skips the CIK if there's no 10-K/10-Q newer than its watermark ([tasks.py#L94-L95](../src/lakehouse/ingestion/tasks.py#L94-L95)).
+`sec_facts_weekly` → [`extract_edgar`](../src/lakehouse/ingestion/tasks.py#L96) checks the `submissions` endpoint and
+skips the CIK if there's no 10-K/10-Q newer than its watermark ([tasks.py#L94-L95](../src/lakehouse/ingestion/tasks.py#L99-L100)).
 Otherwise it stores the full companyfacts JSON (several MB) as **one Bronze row**. Spark
 [`explode_facts`](../spark_jobs/bronze_to_silver_facts.py#L40) unnests taxonomy → concept → unit → fact into ~12k rows
 per company, which are MERGEd with null-safe keys. dbt
@@ -134,17 +138,19 @@ period and pivots the concepts into revenue, net income, and so on.
 
 | Service | Line | Image | Port (host) | Profile | Role |
 |---|---|---|---|---|---|
-| `seaweedfs` | [L27](../infra/docker-compose.yml#L27) | `chrislusf/seaweedfs:4.55` | 8333 | core | S3 object storage for all Iceberg files and checkpoints |
-| `iceberg-rest` | [L39](../infra/docker-compose.yml#L39) | `lakehouse-iceberg-rest:local` | 8181 | core | Iceberg REST catalog, state in Postgres |
-| `postgres` | [L57](../infra/docker-compose.yml#L57) | `pgvector/pgvector:0.8.7-pg16` | 5432 | core | warehouse, Airflow metadata, Iceberg catalog DB |
-| `airflow` | [L76](../infra/docker-compose.yml#L76) | `lakehouse-airflow:local` | 8080 | core | `airflow standalone`, LocalExecutor; runs batch Spark and dbt |
-| `data-browser` | [L108](../infra/docker-compose.yml#L108) | `lakehouse-airflow:local` | 127.0.0.1:8501 | core | read-only web GUI (section 11) |
-| `redpanda` | [L117](../infra/docker-compose.yml#L117) | `redpandadata/redpanda:v26.3.1` | 9092 | stream | Kafka-API broker |
-| `producer` | [L131](../infra/docker-compose.yml#L131) | `lakehouse-producer:local` | – | stream | Binance → `crypto_trades` |
-| `equity-producer` | [L142](../infra/docker-compose.yml#L142) | `lakehouse-producer:local` | – | stream | delayed yfinance → `equity_bars_1m` |
-| `spark-stream` | [L158](../infra/docker-compose.yml#L158) | `lakehouse-spark-stream:local` | – | stream | long-running Structured Streaming app |
+| `seaweedfs` | [L32](../infra/docker-compose.yml#L32) | `chrislusf/seaweedfs:4.55` | 8333 | core | S3 object storage for all Iceberg files and checkpoints |
+| `iceberg-rest` | [L44](../infra/docker-compose.yml#L44) | `lakehouse-iceberg-rest:local` | 8181 | core | Iceberg REST catalog, state in Postgres |
+| `postgres` | [L62](../infra/docker-compose.yml#L62) | `pgvector/pgvector:0.8.7-pg16` | 5432 | core | warehouse, Airflow metadata, Iceberg catalog DB |
+| `airflow` | [L82](../infra/docker-compose.yml#L82) | `lakehouse-airflow:local` | 8080 | core | `airflow standalone`, LocalExecutor; runs batch Spark and dbt |
+| `data-browser` | [L117](../infra/docker-compose.yml#L117) | `lakehouse-airflow:local` | 127.0.0.1:8501 | core | read-only web GUI (section 11) |
+| `redpanda` | [L161](../infra/docker-compose.yml#L161) | `redpandadata/redpanda:v26.3.1` | 9092 | stream | Kafka-API broker |
+| `producer` | [L175](../infra/docker-compose.yml#L175) | `lakehouse-producer:local` | – | stream | Binance → `crypto_trades` |
+| `equity-producer` | [L186](../infra/docker-compose.yml#L186) | `lakehouse-producer:local` | – | stream | delayed yfinance → `equity_bars_1m` |
+| `agents` | [L126](../infra/docker-compose.yml#L126) | `lakehouse-agents:local` | 127.0.0.1:8090 | core | QA + triage agents, embeddings, fact-sheet indexing, Grafana alert receiver (§17) |
+| `grafana` | [L148](../infra/docker-compose.yml#L148) | `grafana/grafana:13.2.7` | 127.0.0.1:3000 | core | dashboard + 6 alert rules (§18) |
+| `spark-stream` | [L202](../infra/docker-compose.yml#L202) | `lakehouse-spark-stream:local` | – | stream | long-running Structured Streaming app |
 
-Named volumes: `seaweed-data`, `pg-data`, `redpanda-data` ([L173-L175](../infra/docker-compose.yml#L173-L175)). Repo
+Named volumes: `seaweed-data`, `pg-data`, `redpanda-data` ([L217-L219](../infra/docker-compose.yml#L217-L219)). Repo
 folders (`src/`, `dags/`, `spark_jobs/`, `dbt/`, `scripts/`, `tests/`, `data/`) are bind-mounted into the containers,
 so code edits apply without a rebuild.
 
@@ -172,7 +178,7 @@ recorded in [VERSIONS.md](VERSIONS.md).
 
 ### 3.3 SeaweedFS (S3)
 
-**Code:** [docker-compose.yml#L29](../infra/docker-compose.yml#L29), identities in
+**Code:** [docker-compose.yml#L29](../infra/docker-compose.yml#L34), identities in
 [infra/seaweedfs/s3.json](../infra/seaweedfs/s3.json). The bucket `lake` is created by `make init`
 ([Makefile](../Makefile), `weed shell` → `s3.bucket.create`).
 
@@ -189,13 +195,13 @@ explicit region in every client. MinIO is not used: its community edition is arc
 
 ### 3.4 Iceberg REST catalog
 
-**Code:** [docker-compose.yml#L39-L55](../infra/docker-compose.yml#L39-L55),
+**Code:** [docker-compose.yml#L39-L55](../infra/docker-compose.yml#L44-L60),
 [docker/iceberg-rest.Dockerfile](../docker/iceberg-rest.Dockerfile).
 
 One catalog serves every engine: PyIceberg ([catalog.py](../src/lakehouse/iceberg/catalog.py#L8)) and Spark
 ([common.py#L21-L22](../spark_jobs/common.py#L21-L22)) both talk to `http://iceberg-rest:8181`. The catalog is a
 `JdbcCatalog` whose state lives in the Postgres database `iceberg_catalog`
-([L45](../infra/docker-compose.yml#L45)).
+([L50](../infra/docker-compose.yml#L50)).
 
 **Why Postgres and not SQLite:** with SQLite, two streaming queries plus compaction committing at once failed with
 `SQLITE_BUSY`, and after adding WAL with `SQLITE_BUSY_SNAPSHOT`. The stream crashed with `CommitStateUnknownException`.
@@ -218,7 +224,7 @@ and `make init` re-applies it.
 | `iceberg_catalog` | iceberg | Iceberg JdbcCatalog tables |
 
 Roles and least privilege ([warehouse.sql#L6-L19](../infra/postgres/init/sql/warehouse.sql#L6-L19),
-[grants L199-L208](../infra/postgres/init/sql/warehouse.sql#L199-L208)):
+[grants L199-L208](../infra/postgres/init/sql/warehouse.sql#L204-L213)):
 
 | Role | Can do |
 |---|---|
@@ -231,20 +237,20 @@ Roles and least privilege ([warehouse.sql#L6-L19](../infra/postgres/init/sql/war
 
 | Table | Line | One row per |
 |---|---|---|
-| `ops.pipeline_run` | [L24](../infra/postgres/init/sql/warehouse.sql#L24) | task invocation: status, row counts, scrubbed error, Airflow run id |
-| `ops.watermark` | [L43](../infra/postgres/init/sql/warehouse.sql#L43) | `(source, entity)` → last value loaded |
-| `ops.reconciliation` | [L51](../infra/postgres/init/sql/warehouse.sql#L51) | layer hop: count_from/to, missing, duplicates, late, `ok`/`mismatch` |
-| `ops.stream_metrics` | [L68](../infra/postgres/init/sql/warehouse.sql#L68) | micro-batch: events, late events, parse errors, max event lag |
-| `ops.incident` | [L81](../infra/postgres/init/sql/warehouse.sql#L81) | failed task (from `on_failure_callback`) |
-| `ops.dbt_result` | [L95](../infra/postgres/init/sql/warehouse.sql#L95) | dbt node result per invocation |
+| `ops.pipeline_run` | [L25](../infra/postgres/init/sql/warehouse.sql#L25) | task invocation: status, row counts, scrubbed error, Airflow run id |
+| `ops.watermark` | [L44](../infra/postgres/init/sql/warehouse.sql#L44) | `(source, entity)` → last value loaded |
+| `ops.reconciliation` | [L52](../infra/postgres/init/sql/warehouse.sql#L52) | layer hop: count_from/to, missing, duplicates, late, `ok`/`mismatch` |
+| `ops.stream_metrics` | [L69](../infra/postgres/init/sql/warehouse.sql#L69) | micro-batch: events, late events, parse errors, max event lag |
+| `ops.incident` | [L82](../infra/postgres/init/sql/warehouse.sql#L82) | failed task (from `on_failure_callback`) |
+| `ops.dbt_result` | [L100](../infra/postgres/init/sql/warehouse.sql#L100) | dbt node result per invocation |
 
 **`lake_silver` tables** are the copy targets, each with a primary key that matches the Silver unique key
-([L108-L183](../infra/postgres/init/sql/warehouse.sql#L108)). `financial_facts` uses
-`unique nulls not distinct` ([L165](../infra/postgres/init/sql/warehouse.sql#L165)): `period_start` is null for
+([L113](../infra/postgres/init/sql/warehouse.sql#L113)). `financial_facts` uses
+`unique nulls not distinct` ([L170](../infra/postgres/init/sql/warehouse.sql#L170)): `period_start` is null for
 balance-sheet facts, and an ordinary unique constraint treats nulls as distinct, so it would never conflict and every
 rerun would insert duplicates.
 
-**Migration block** ([L188](../infra/postgres/init/sql/warehouse.sql#L188)): a guarded `do $$ … $$` block dropped the
+**Migration block** ([L193](../infra/postgres/init/sql/warehouse.sql#L193)): a guarded `do $$ … $$` block dropped the
 four Tiingo-only price columns. It runs only while the old column exists, and drops the one dependent dbt view
 explicitly instead of using `CASCADE`.
 
@@ -254,7 +260,7 @@ explicitly instead of using `CASCADE`.
 
 `Settings` (pydantic-settings) reads environment variables. Defaults are the in-container hostnames, so the same code
 runs in every container. Secrets are `SecretStr`, which prevents them from being printed by accident.
-`settings()` is cached ([L35](../src/lakehouse/config.py#L35)). `.env` is git-ignored. The only external credential
+`settings()` is cached ([L53](../src/lakehouse/config.py#L53)). `.env` is git-ignored. The only external credential
 left is `SEC_USER_AGENT`; yfinance and Binance need none.
 
 ---
@@ -286,15 +292,15 @@ _run_finished(run_id, "success", result if isinstance(result, dict) else {}, Non
 - **Fail-open:** `_run_started`, `_run_finished`, `record_reconciliation` and `on_failure_callback` are wrapped by
   [`_fail_open`](../src/lakehouse/ops/telemetry.py#L29). An `ops` write error is logged and swallowed, so telemetry
   can never fail the ETL.
-- **Watermarks are deliberately *not* fail-open** ([L144-L160](../src/lakehouse/ops/telemetry.py#L144)): they decide
+- **Watermarks are deliberately *not* fail-open** ([L145](../src/lakehouse/ops/telemetry.py#L145)): they decide
   *what* gets loaded, so a failure must stop the task. A unit test asserts both behaviors
   ([tests/unit/test_telemetry.py](../tests/unit/test_telemetry.py)).
 - **Airflow context** ([`airflow_context`](../src/lakehouse/ops/telemetry.py#L41)) comes from the Task SDK inside a
   task. Inside `spark-submit` subprocesses it comes from the `AIRFLOW_CTX_*` env vars that BashOperator exports, which
   is how Spark jobs get the right dag/task/run ids.
 - **Reconciliation status** is `ok` only if counts match and there are no missing or duplicate rows
-  ([L130](../src/lakehouse/ops/telemetry.py#L130)).
-- **`on_failure_callback`** ([L163](../src/lakehouse/ops/telemetry.py#L163)) inserts an `ops.incident` and posts to
+  ([L131](../src/lakehouse/ops/telemetry.py#L131)).
+- **`on_failure_callback`** ([L164](../src/lakehouse/ops/telemetry.py#L164)) inserts an `ops.incident` and posts to
   `ALERT_WEBHOOK_URL` if one is set. It is attached to every task through `DEFAULT_ARGS`.
 
 **Scrubber** ([scrub.py#L11](../src/lakehouse/ops/scrub.py#L11)) masks `token=…`-style secrets, quoted literals, long
@@ -306,7 +312,7 @@ through it, because the triage agent (next stage) will read `ops` and send it to
 **Code:** [src/lakehouse/iceberg/tables.py](../src/lakehouse/iceberg/tables.py),
 [catalog.py](../src/lakehouse/iceberg/catalog.py), run by [scripts/init_lake.py](../scripts/init_lake.py).
 
-All schemas and partition specs live in **one dict**, `TABLES` ([L57-L82](../src/lakehouse/iceberg/tables.py#L57)).
+All schemas and partition specs live in **one dict**, `TABLES` ([L57](../src/lakehouse/iceberg/tables.py#L57)).
 Shared column groups:
 
 - `META` = `_run_id, _source, _ingested_at, _payload_hash` (every table)
@@ -362,15 +368,15 @@ retries 429/5xx/connection errors with exponential backoff (tenacity, 5 attempts
 
 **Code:** [src/lakehouse/ingestion/yahoo.py](../src/lakehouse/ingestion/yahoo.py).
 
-- [`fetch_daily`](../src/lakehouse/ingestion/yahoo.py#L40) calls
+- [`fetch_daily`](../src/lakehouse/ingestion/yahoo.py#L42) calls
   `Ticker.history(interval="1d", auto_adjust=False, actions=True)`. yfinance's `end` is exclusive, hence `end + 1 day`
-  ([L43](../src/lakehouse/ingestion/yahoo.py#L43)). It retries `YFRateLimitError` with backoff.
-- `yf.config.debug.hide_exceptions = False` ([L22](../src/lakehouse/ingestion/yahoo.py#L22)) makes yfinance *raise*
+  ([L45](../src/lakehouse/ingestion/yahoo.py#L45)). It retries `YFRateLimitError` with backoff.
+- `yf.config.debug.hide_exceptions = False` ([L24](../src/lakehouse/ingestion/yahoo.py#L24)) makes yfinance *raise*
   instead of printing an error and returning an empty DataFrame. Otherwise failures would look like "no data".
-- [`to_records`](../src/lakehouse/ingestion/yahoo.py#L26) turns the DataFrame into JSON-safe dicts with yfinance's own
+- [`to_records`](../src/lakehouse/ingestion/yahoo.py#L28) turns the DataFrame into JSON-safe dicts with yfinance's own
   column names. The index is formatted with `strftime("%Y-%m-%d")` in its New York time zone. Converting through UTC
   would shift midnight-ET dates to the previous day.
-- [`parse_daily`](../src/lakehouse/ingestion/yahoo.py#L49) checks the column set first. **Any drift quarantines every
+- [`parse_daily`](../src/lakehouse/ingestion/yahoo.py#L51) checks the column set first. **Any drift quarantines every
   row**, so a renamed column is never half-parsed. It then validates each record; the raw record is kept as `_raw_line`.
 
 ### 5.4 EDGAR extractor
@@ -397,7 +403,7 @@ with table.transaction() as tx:
 
 The delete and the append are **one Iceberg snapshot**, so readers never see a half-replaced slice. Rerunning the same
 logical date replaces the slice instead of appending. The optional `in_filters` narrow the slice, for example to the
-CIKs fetched in this run ([tasks.py#L121](../src/lakehouse/ingestion/tasks.py#L121)).
+CIKs fetched in this run ([tasks.py#L121](../src/lakehouse/ingestion/tasks.py#L127)).
 [`write_quarantine`](../src/lakehouse/ingestion/bronze_writer.py#L45) uses the same mechanism for `bronze.quarantine`.
 [`slice_keys`](../src/lakehouse/ingestion/bronze_writer.py#L54) reads only key columns, so reconciliation never scans
 multi-MB payload columns.
@@ -409,13 +415,13 @@ multi-MB payload columns.
 
 | Function | Line | Key behavior |
 |---|---|---|
-| `prices_window` | [L32](../src/lakehouse/ingestion/tasks.py#L32) | `[ds − 7 d, ds]`: deterministic, so a rerun fetches the same range; the overlap picks up vendor corrections |
-| `extract_prices` | [L41](../src/lakehouse/ingestion/tasks.py#L41) | one ticker → `data/raw/<source>/<ds>/<ticker>.json` |
-| `land_prices_bronze` | [L64](../src/lakehouse/ingestion/tasks.py#L64) | quarantine first, then Bronze, then the **> 5 % quarantine rate check** ([L69](../src/lakehouse/ingestion/tasks.py#L69)), so rejected rows stay inspectable when the run fails |
-| `reconcile_prices_source_bronze` | [L76](../src/lakehouse/ingestion/tasks.py#L76) | parsed keys vs Bronze keys → missing / duplicates |
-| `extract_edgar` | [L91](../src/lakehouse/ingestion/tasks.py#L91) | skip unless a newer periodic filing exists ([L94-L95](../src/lakehouse/ingestion/tasks.py#L94-L95)) |
-| `land_edgar_bronze` | [L103](../src/lakehouse/ingestion/tasks.py#L103) | overwrite **only the fetched CIKs**; watermark advanced per CIK after a successful land ([L125](../src/lakehouse/ingestion/tasks.py#L125)) |
-| `reconcile_edgar_source_bronze` | [L130](../src/lakehouse/ingestion/tasks.py#L130) | fetched CIKs vs Bronze rows for those CIKs |
+| `prices_window` | [L34](../src/lakehouse/ingestion/tasks.py#L34) | `[ds − 7 d, ds]`: deterministic, so a rerun fetches the same range; the overlap picks up vendor corrections |
+| `extract_prices` | [L43](../src/lakehouse/ingestion/tasks.py#L43) | one ticker → `data/raw/<source>/<ds>/<ticker>.json` |
+| `land_prices_bronze` | [L67](../src/lakehouse/ingestion/tasks.py#L67) | quarantine first, then the **> 5 % quarantine rate check** ([L72](../src/lakehouse/ingestion/tasks.py#L72)), and only then the Bronze overwrite: a 100 %-quarantined run (schema drift) fails without wiping its slice, and the rejected rows stay inspectable. A provisional latest bar (no close yet) is skipped, not quarantined |
+| `reconcile_prices_source_bronze` | [L81](../src/lakehouse/ingestion/tasks.py#L81) | parsed keys vs Bronze keys → missing / duplicates |
+| `extract_edgar` | [L96](../src/lakehouse/ingestion/tasks.py#L96) | skip unless a newer periodic filing exists ([L99-L100](../src/lakehouse/ingestion/tasks.py#L99-L100)) |
+| `land_edgar_bronze` | [L108](../src/lakehouse/ingestion/tasks.py#L108) | overwrite **only the fetched CIKs**; watermark advanced per CIK after a successful land ([L130](../src/lakehouse/ingestion/tasks.py#L130)) |
+| `reconcile_edgar_source_bronze` | [L135](../src/lakehouse/ingestion/tasks.py#L135) | fetched CIKs vs Bronze rows for those CIKs |
 
 **Why mapped extract tasks plus a single land task:** 12 tasks committing to the same Iceberg partition would race.
 Extracts run in parallel (max 4) and only write files; one task does the single commit.
@@ -434,7 +440,7 @@ with S3FileIO on SeaweedFS ([L21-L22](../spark_jobs/common.py#L21-L22)). It also
 `row_number()` over the key, ordered by recency. It is built-in Spark only, with no Python UDF.
 
 Batch jobs run as `spark-submit --master local[*] --driver-memory 2g` inside the Airflow container
-([dags/common.py#L23](../dags/common.py#L23)).
+([dags/common.py#L23](../dags/common.py#L24)).
 
 ### 6.2 Prices: `bronze_to_silver_prices.py`
 
@@ -461,12 +467,12 @@ when not matched then insert *
 **Code:** [spark_jobs/bronze_to_silver_facts.py](../spark_jobs/bronze_to_silver_facts.py).
 
 - An explicit nested schema `PAYLOAD → facts: map<taxonomy, map<concept, {label, units: map<unit, array<FACT>>}>>`
-  ([L23-L38](../spark_jobs/bronze_to_silver_facts.py#L23)) matches the recorded fixture.
+  ([L23](../spark_jobs/bronze_to_silver_facts.py#L23)) matches the recorded fixture.
 - [`explode_facts`](../spark_jobs/bronze_to_silver_facts.py#L40) uses four built-in `explode`s
-  ([L43-L46](../spark_jobs/bronze_to_silver_facts.py#L43-L46)), keeps `us-gaap` and `period_end ≥ 2019-01-01`, and
-  computes a row-level hash of the business fields ([L57](../spark_jobs/bronze_to_silver_facts.py#L57)).
+  ([L50-L53](../spark_jobs/bronze_to_silver_facts.py#L50-L53)), keeps `us-gaap` and `period_end ≥ 2019-01-01`, and
+  computes a row-level hash of the business fields ([L66](../spark_jobs/bronze_to_silver_facts.py#L66)).
 - The MERGE key `(cik, concept, unit, period_start, period_end, accession_no)` uses **null-safe equality**
-  `<=>` ([L75](../spark_jobs/bronze_to_silver_facts.py#L75)), because `period_start` is null for instant facts.
+  `<=>` ([L89](../spark_jobs/bronze_to_silver_facts.py#L89)), because `period_start` is null for instant facts.
 - Reconciliation counts duplicate *payloads* in Bronze. Repeated facts inside one EDGAR payload are a source quirk,
   handled by the dedup, not a load error.
 
@@ -480,11 +486,13 @@ window are pruned. The 6-hour lookback means trades that landed late after a str
 ### 6.5 Maintenance: `maintenance.py`
 
 **Code:** [spark_jobs/maintenance.py](../spark_jobs/maintenance.py). It runs Iceberg procedures:
-`rewrite_data_files` (compaction to 128 MB targets) on the streaming tables ([L23](../spark_jobs/maintenance.py#L23)),
-`expire_snapshots` older than 7 days but keeping 5 ([L28](../spark_jobs/maintenance.py#L28)), and
-`remove_orphan_files` with `prefix_listing => true` ([L31](../spark_jobs/maintenance.py#L31)), which lists files through
-S3FileIO so the Airflow image needs no Hadoop S3 filesystem. Measured: 30 small stream files → 3, while the stream kept
-committing.
+`rewrite_data_files` (compaction to 128 MB targets, `partial-progress.enabled`) on the five streaming tables
+([L30](../spark_jobs/maintenance.py#L30)), `expire_snapshots` older than 7 days but keeping 5
+([L32](../spark_jobs/maintenance.py#L32)), and `remove_orphan_files` with `prefix_listing => true`
+([L35](../spark_jobs/maintenance.py#L35)), which lists files through S3FileIO so the Airflow image needs no Hadoop S3
+filesystem. The stream keeps committing meanwhile, so a maintenance commit can lose the optimistic-concurrency race.
+Each table and procedure is therefore isolated, and the run fails once at the end with a precise list
+(`MaintenanceFailed`). Measured: 30 → 3, 72 → 1 and 68 → 1 files while the stream kept committing.
 
 ---
 
@@ -584,8 +592,8 @@ is Postgres's fastest load path.
 
 Airflow 3.3 (`airflow standalone`, LocalExecutor, Postgres metadata DB). DAG files are thin: they only wire functions
 from `src/` and `spark-submit` calls. Shared settings live in [dags/common.py](../dags/common.py): 3 retries with
-exponential backoff, `on_failure_callback` → incident ([L9](../dags/common.py#L9)), and the Assets
-([L17-L20](../dags/common.py#L17-L20)). All DAGs start paused.
+exponential backoff, `on_failure_callback` → incident ([L10](../dags/common.py#L10)), and the Assets
+([L18-L21](../dags/common.py#L18-L21)). All DAGs start paused.
 
 ### 9.1 `prices_eod_daily` and `backfill_prices`
 
@@ -612,7 +620,7 @@ prices. [`companies`](../dags/sec_facts_weekly.py#L20) expands each ticker into 
 
 **Code:** [dags/stream_silver_15m.py](../dags/stream_silver_15m.py). Every 15 minutes:
 `spark_dedup_trades → copy_bars_to_pg → check_stream_health`, plus `copy_equity_bars_to_pg` in parallel.
-[`check_stream_health`](../dags/stream_silver_15m.py#L38) fails with `StreamStalled` if `ops.stream_metrics` has no
+[`check_stream_health`](../dags/stream_silver_15m.py#L39) fails with `StreamStalled` if `ops.stream_metrics` has no
 crypto events in the last 5 minutes. That's how Airflow *monitors* a stream it doesn't run. The equity feed is excluded
 because it is silent outside market hours.
 
@@ -781,8 +789,8 @@ messages point to them, and they will be the triage agent's knowledge base:
 
 | Hop | Mechanism | Code |
 |---|---|---|
-| Source → Bronze (prices) | delete + append of `(_source, _logical_date)` in one commit; deterministic fetch window | [bronze_writer.py#L38](../src/lakehouse/ingestion/bronze_writer.py#L38), [tasks.py#L32](../src/lakehouse/ingestion/tasks.py#L32) |
-| Source → Bronze (EDGAR) | same, scoped to the fetched CIKs; watermark skip | [tasks.py#L121](../src/lakehouse/ingestion/tasks.py#L121) |
+| Source → Bronze (prices) | delete + append of `(_source, _logical_date)` in one commit; deterministic fetch window | [bronze_writer.py#L38](../src/lakehouse/ingestion/bronze_writer.py#L38), [tasks.py#L32](../src/lakehouse/ingestion/tasks.py#L34) |
+| Source → Bronze (EDGAR) | same, scoped to the fetched CIKs; watermark skip | [tasks.py#L121](../src/lakehouse/ingestion/tasks.py#L127) |
 | Kafka → Bronze (stream) | checkpointed offsets; foreachBatch may replay a batch (at-least-once) | [stream_market.py#L247](../spark_jobs/stream_market.py#L247) |
 | Bronze → Silver | `MERGE` on the unique key; update only if the hash changed and the source is newer | §6.2–6.4, [stream_market.py#L187](../spark_jobs/stream_market.py#L187) |
 | Silver → Postgres | watermark + overlap, `INSERT … ON CONFLICT DO UPDATE` | [warehouse_copy.py](../src/lakehouse/warehouse_copy.py) |
@@ -803,7 +811,7 @@ messages point to them, and they will be the triage agent's knowledge base:
 | Check | Where |
 |---|---|
 | Schema / types / required fields | pydantic contracts (batch), explicit Spark schema + `_valid` (stream) → `bronze.quarantine` |
-| Quarantine rate > 5 % fails the run | [tasks.py `_check_quarantine_rate`](../src/lakehouse/ingestion/tasks.py#L57) |
+| Quarantine rate > 5 % fails the run | [tasks.py `_check_quarantine_rate`](../src/lakehouse/ingestion/tasks.py#L59) |
 | Counts, missing, duplicates per hop | `ops.reconciliation` |
 | Stream health and lag | `ops.stream_metrics` + `check_stream_health` |
 | Freshness | dbt sources |
@@ -832,10 +840,158 @@ messages point to them, and they will be the triage agent's knowledge base:
 
 - **yfinance** is an unofficial, scraped API (personal-use terms; it can throttle or change without notice).
 - **Binance source gaps:** trades are lost while the *producer* is down (a WebSocket can't be replayed).
-- **Late-event counting** resets on stream restart; the equity producer's 5-day refill shows up as late events. A
-  future late-rate alert must allow for that.
-- **Not built yet** (next stages, see [PROGRESS.md](PROGRESS.md)): Grafana dashboard and alerts, Spark performance
-  write-up, fact sheets + QA agent, triage agent + fault injection, PII separation.
-- **Leftover table** `intermediate.int_crypto_returns_1m` from a model rename (dbt doesn't drop removed models).
-- **Laptop simplifications:** single-node everything, `SIMPLE_AUTH_MANAGER_ALL_ADMINS`, local staging folder instead of
-  an object-store prefix, dbt on Postgres instead of on the lake.
+- **Late-event counting** resets on stream restart; the equity producer's 5-day refill shows up as late events.
+- **Not yet done:** merge-on-read for `silver.financial_facts` with delete-file maintenance (PERFORMANCE.md); live-LLM
+  evaluation numbers (need a DeepSeek key); README screenshots; the fresh-clone timing test.
+- **Laptop simplifications:** single-node everything, `SIMPLE_AUTH_MANAGER_ALL_ADMINS` (the agent's Airflow token comes
+  without credentials), a local staging folder instead of an object-store prefix, dbt on Postgres instead of on the lake,
+  no auth on the localhost-only agents and browser ports.
+
+---
+
+## 17. Agents: the shared loop, the QA agent and the triage agent
+
+**Code:** [agents/](../agents/) · container [docker/agents.Dockerfile](../docker/agents.Dockerfile) ·
+service [agents/service.py](../agents/service.py)
+
+There are two agents, and they share everything except their prompt and tools:
+
+| Agent | Entry point | Tools (all read-only) |
+|---|---|---|
+| Financial QA | [`ask`](../agents/qa/agent.py#L64) (`make ask Q=...`, `POST /ask`) | `search_fact_sheets`, `list_tables`, `run_sql` ([L40](../agents/qa/agent.py#L40)) |
+| Incident triage | [`triage`](../agents/triage/agent.py#L180) (`make triage INCIDENT=...`, `POST /triage`) | `get_incident`, `get_failed_runs`, `get_recent_runs`, `get_reconciliation_issues`, `get_stream_metrics`, `get_dbt_failures`, `get_task_log`, `search_runbooks` ([L146](../agents/triage/agent.py#L146)) |
+
+### 17.1 The LLM client
+
+[`DeepSeekClient.chat`](../agents/core/llm.py#L35) posts to `https://api.deepseek.com/chat/completions` with
+`tools`, thinking mode enabled and a configurable `reasoning_effort`. It retries 429/5xx and timeouts with exponential
+backoff. It uses plain `requests` rather than an SDK, because there is one endpoint.
+
+### 17.2 The loop and its guardrails
+
+[`run_agent`](../agents/core/loop.py#L69): reason → call tools → observe → repeat → final answer.
+
+```
+messages = [system, user]
+loop:
+    if steps / seconds / tokens over budget  -> forced final answer (tool_choice="none")
+    reply = llm.chat(messages, tools)        # keeps reasoning_content (DeepSeek returns 400 otherwise)
+    no tool calls?                           -> final answer
+    for each tool call: guardrails -> run tool -> append {"role": "tool", ...}
+    too many blocked calls                   -> forced final answer
+```
+
+| Guardrail | Where | Effect |
+|---|---|---|
+| step cap (`max_steps`) | [L148](../agents/core/loop.py#L148) | stops a model that never stops calling tools |
+| time and token budgets | [L150-L152](../agents/core/loop.py#L150-L152) | bound cost and latency |
+| repeat detection (`max_repeats`) | [L128](../agents/core/loop.py#L128) | the identical (tool, sorted-JSON args) call runs once; repeats get a "BLOCKED, reuse the result" observation |
+| tool-call budget | [L136](../agents/core/loop.py#L136) | caps the total number of executed tools |
+| blocked-call cap (`max_blocked`) | [L167](../agents/core/loop.py#L167) | a model that insists on looping is stopped |
+| output truncation | [L144](../agents/core/loop.py#L144) | a huge tool result can't flood the context |
+| forced final answer | [L108](../agents/core/loop.py#L108) | one last call with tools disabled, so a stopped run still answers, and `stopped_by` says why |
+| errors as observations | inside `execute` | a failing tool, bad JSON or an unknown tool becomes a scrubbed `ERROR:` message the model can react to |
+| audit log | [agents/core/trace.py](../agents/core/trace.py#L15) | every prompt, reply, tool call and result goes to `agent.run_log` (fail-open) |
+
+The guardrails are tested with a scripted fake LLM ([tests/unit/test_agent_loop.py](../tests/unit/test_agent_loop.py)): a model
+that repeats one call forever is stopped by `blocked_calls`, and one that never finishes is stopped by `max_steps`.
+
+### 17.3 Retrieval: fact sheets, embeddings, hybrid search
+
+- **Documents** ([agents/retrieval/documents.py](../agents/retrieval/documents.py)):
+  [`fact_sheet`](../agents/retrieval/documents.py#L113) renders one Markdown sheet per row of
+  `marts.mart_fact_sheet_inputs` (Jinja), with a JSON sidecar, into `data/fact_sheets/{ticker}/{fy}-{fp}.md`.
+  Runbooks are documents too ([`runbook`](../agents/retrieval/documents.py#L130)). Each `## ` section is one chunk,
+  prefixed with the document identity, so a retrieved chunk carries its citation id.
+- **Store** ([warehouse.sql](../infra/postgres/init/sql/warehouse.sql#L240)): `agent.chunks` has
+  `embedding vector(384)` with an HNSW index and a generated `tsvector` with a GIN index.
+- **Incremental indexing** ([`refresh_index`](../agents/retrieval/search.py#L105)): only documents whose `content_hash`
+  changed are re-embedded, and vanished documents are deleted. The `fact_sheets` DAG triggers it after every dbt build
+  (Asset `marts`).
+- **Hybrid search** ([`hybrid_search`](../agents/retrieval/search.py#L55)): pgvector cosine top-N plus full-text top-N
+  with OR semantics ([`or_query`](../agents/retrieval/search.py#L49)), merged with
+  [`rrf`](../agents/retrieval/search.py#L40). Optional filters: kind, ticker, fiscal year and period.
+- **Evaluation** ([agents/eval/retrieval_eval.py](../agents/eval/retrieval_eval.py#L38),
+  [qa_questions.yaml](../agents/eval/qa_questions.yaml)): recall@5 0.819 hybrid vs 0.764 vector vs 0.681 text.
+
+### 17.4 The QA agent and its SQL guard
+
+The prompt ([`SYSTEM`](../agents/qa/agent.py#L22)) requires answers only from tool results, with `[DOC-ID]` citations.
+After the run, [`ask`](../agents/qa/agent.py#L64) compares the cited ids with the ids the tools actually returned
+(`ungrounded_citations`, [L74](../agents/qa/agent.py#L74)).
+
+[`check_sql`](../agents/qa/sql_guard.py#L31) is the NL-SQL guard. It parses with sqlglot and requires exactly one
+statement, which must be a query. It rejects DML/DDL nodes anywhere in the tree
+([`FORBIDDEN_NODES`](../agents/qa/sql_guard.py#L22)), tables outside the `marts` allowlist
+([`ALLOWED_TABLES`](../agents/qa/sql_guard.py#L17)) and dangerous functions
+([`FORBIDDEN_FUNC_PREFIXES`](../agents/qa/sql_guard.py#L24)). It wraps the query in a LIMIT.
+[`run_sql`](../agents/qa/sql_guard.py#L59) then executes as `agent_ro`, read-only, with a 5 s timeout. 16 tests:
+[tests/unit/test_sql_guard.py](../tests/unit/test_sql_guard.py).
+
+### 17.5 The triage agent
+
+The prompt ([`SYSTEM`](../agents/triage/agent.py#L31)) explains how the pipeline reports problems and fixes the note format:
+Summary · Evidence · Likely cause · Confidence · Suggested next step · `CATEGORY:` (one of
+[`CATEGORIES`](../agents/triage/agent.py#L26)). [`get_task_log`](../agents/triage/agent.py#L120) reads Airflow 3's
+`/api/v2` logs, including `map_index` for mapped tasks and the structured `error_detail` that holds the exception,
+and scrubs every line. The note goes to `incidents/<id>.md`. The agent can update only `ops.incident.agent_diagnosis`
+and `triage_note_path`, through a column-level grant ([warehouse.sql](../infra/postgres/init/sql/warehouse.sql#L287)).
+
+### 17.6 The agents service
+
+[agents/service.py](../agents/service.py#L49) is a standard-library HTTP server holding the embedding model in memory:
+`POST /fact-sheets/refresh`, `/ask`, `/triage`, and `/grafana-webhook`.
+[`incidents_from_grafana`](../agents/service.py#L29) turns firing alerts into `ops.incident` rows; auto-triage is
+optional (`TRIAGE_ON_ALERT`).
+
+---
+
+## 18. Grafana: dashboard and alerts as code
+
+**Code:** [scripts/build_dashboard.py](../scripts/build_dashboard.py) → `infra/grafana/provisioning/` (`make dashboard`).
+
+- **Datasource** ([warehouse.yaml](../infra/grafana/provisioning/datasources/warehouse.yaml)): Postgres as `grafana_ro`.
+- **Dashboard** ([`dashboard`](../scripts/build_dashboard.py#L36)): 12 panels. Volatility 20d/60d, regime heatmap
+  (status history), drawdown, latest z-scores, correlation matrix, intraday volatility, freshness, reconciliation, stream
+  events and lag, dbt results.
+- **Alerts** ([`alert_rules`](../scripts/build_dashboard.py#L109)): volatility spike (z > 3, one alert instance per ticker),
+  missed daily load (weekend-aware, [L117](../scripts/build_dashboard.py#L117)), stream stalled, reconciliation mismatch,
+  dbt failure, quarantine spike. Each has a severity label and a runbook link.
+- **Routing** ([contact-points.yaml](../infra/grafana/provisioning/alerting/contact-points.yaml)): a webhook to the agents
+  service, which opens `ops.incident`.
+- **Incident dedupe** ([telemetry.py](../src/lakehouse/ops/telemetry.py#L177)): at most one open incident per failed DAG
+  run, enforced by a partial unique index.
+
+---
+
+## 19. PII separation
+
+**Code:** [agents/pii/subscribers.py](../agents/pii/subscribers.py),
+[fct_alert_targets.sql](../dbt/models/marts/fct_alert_targets.sql),
+[tests/integration/test_security.py](../tests/integration/test_security.py).
+
+`pii.subscribers` holds synthetic name/email/phone data, readable only by `pii_admin` (`revoke all … from public`,
+[warehouse.sql](../infra/postgres/init/sql/warehouse.sql#L289)). Analytics sees only
+[`subscriber_key`](../agents/pii/subscribers.py#L28) = HMAC-SHA256(secret, id). `marts.fct_alert_targets` lists the keys
+to alert today. [`notify`](../agents/pii/subscribers.py#L57), running as `pii_admin`, is the only join back to contacts,
+and it logs masked emails. The integration tests prove that four roles get "permission denied" and that no
+email/phone column exists outside `pii`.
+
+---
+
+## 20. Fault injection and the performance harness
+
+- **[scripts/inject_fault.py](../scripts/inject_fault.py)** (`make fault FAULT=...`, `make fault-cleanup FAULT=...`)
+  injects faults through the production paths:
+  - `api_500` and `schema_change` run `prices_eod_daily` in-process with the source patched
+    ([`run_prices_with_fault`](../scripts/inject_fault.py#L89)).
+  - `duplicate_batch` appends a Bronze slice a second time, bypassing the overwrite
+    ([`duplicate_slice`](../scripts/inject_fault.py#L114)), so reconciliation and the Grafana alert catch it.
+  - `stream_stop` stops the producer.
+
+  Each fault creates exactly one real incident, which [agents/eval/agent_eval.py](../agents/eval/agent_eval.py#L50)
+  hands to the triage agent and scores.
+- **[spark_jobs/perf_facts.py](../spark_jobs/perf_facts.py)** imports the production facts job. Each variant starts from
+  the same snapshot ([`rollback_to_snapshot`](../spark_jobs/perf_facts.py#L68)) and is measured through the Spark REST
+  API for its job group ([`stage_metrics`](../spark_jobs/perf_facts.py#L27)). Results and analysis:
+  [PERFORMANCE.md](PERFORMANCE.md).

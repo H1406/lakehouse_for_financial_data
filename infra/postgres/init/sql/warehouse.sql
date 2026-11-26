@@ -6,7 +6,7 @@ create extension if not exists vector;
 -- Roles ------------------------------------------------------------------
 select format('create role %I login password %L', r.name, r.pw)
 from (values ('etl_writer', :'etl_writer_pw'), ('dbt', :'dbt_pw'), ('grafana_ro', :'grafana_ro_pw'),
-             ('agent_ro', :'agent_ro_pw'), ('agent_rw', :'agent_rw_pw')) as r(name, pw)
+             ('agent_ro', :'agent_ro_pw'), ('agent_rw', :'agent_rw_pw'), ('pii_admin', :'pii_admin_pw')) as r(name, pw)
 where not exists (select 1 from pg_roles where rolname = r.name)
 \gexec
 
@@ -17,6 +17,7 @@ create schema if not exists staging authorization dbt;
 create schema if not exists intermediate authorization dbt;
 create schema if not exists marts authorization dbt;
 create schema if not exists agent authorization agent_rw;
+create schema if not exists pii authorization pii_admin;
 
 -- ops: pipeline telemetry --------------------------------------------------
 set role etl_writer;
@@ -91,6 +92,10 @@ create table if not exists ops.incident (
     human_verdict     text,
     resolved_at       timestamptz
 );
+
+-- At most one OPEN incident per failed DAG run (dedupes mapped tasks failing together; atomic under concurrency).
+create unique index if not exists incident_open_per_run on ops.incident (dag_id, airflow_run_id)
+    where resolved_at is null and airflow_run_id is not null;
 
 create table if not exists ops.dbt_result (
     invocation_id          text not null,
@@ -206,3 +211,82 @@ alter default privileges for role etl_writer in schema ops grant select on table
 
 grant usage on schema marts to grafana_ro, agent_ro;
 alter default privileges for role dbt in schema marts grant select on tables to grafana_ro, agent_ro;
+
+-- agent: retrieval store for the QA and triage agents (owned by agent_rw) ---
+set role agent_rw;
+
+create table if not exists agent.documents (
+    doc_id        text primary key,               -- e.g. 'NVDA-2026-Q3', 'runbook:stream_stalled'
+    kind          text not null check (kind in ('fact_sheet', 'runbook')),
+    ticker        text,
+    fiscal_year   integer,
+    fiscal_period text,
+    title         text not null,
+    path          text not null,
+    content_hash  text not null,                  -- re-embed only when this changes
+    metadata      jsonb not null default '{}',
+    updated_at    timestamptz not null default now()
+);
+
+create table if not exists agent.chunks (
+    chunk_id   text primary key,                  -- '<doc_id>#<n>'
+    doc_id     text not null references agent.documents (doc_id) on delete cascade,
+    chunk_no   integer not null,
+    section    text,
+    content    text not null,
+    embedding  vector(384) not null,              -- all-MiniLM-L6-v2, normalized
+    tsv        tsvector generated always as (to_tsvector('english', content)) stored
+);
+create index if not exists chunks_embedding_hnsw on agent.chunks using hnsw (embedding vector_cosine_ops);
+create index if not exists chunks_tsv_gin on agent.chunks using gin (tsv);
+create index if not exists chunks_doc on agent.chunks (doc_id);
+
+-- Every prompt, model reply and tool call of every agent run (guardrail requirement: runs are auditable).
+create table if not exists agent.run_log (
+    id         bigserial primary key,
+    run_id     text not null,
+    agent      text not null,
+    step       integer,
+    event      text not null,                     -- start | llm | tool | guardrail | final
+    tool_name  text,
+    payload    jsonb,
+    created_at timestamptz not null default now()
+);
+create index if not exists run_log_run on agent.run_log (run_id, id);
+
+reset role;
+
+-- PII (stretch): contact details live only in `pii`; analytics sees an HMAC key -----------------------
+set role pii_admin;
+create table if not exists pii.subscribers (
+    subscriber_id bigint primary key,
+    name          text not null,
+    email         text not null,
+    phone         text not null,
+    created_at    timestamptz not null default now()
+);
+reset role;
+
+set role etl_writer;
+create table if not exists lake_silver.alert_subscriptions (
+    subscriber_key text not null,                 -- HMAC-SHA256(secret, subscriber_id): no PII
+    ticker         text not null,
+    z_threshold    double precision not null default 3,
+    primary key (subscriber_key, ticker)
+);
+reset role;
+
+-- Grants for the agents and PII -----------------------------------------------------------------------
+grant usage on schema agent to agent_ro, dbt;
+grant select on agent.documents, agent.chunks to agent_ro;
+grant select on all tables in schema agent to dbt;    -- read-only, for the data browser
+
+-- Triage agent: may read ops and write ONLY its two columns of ops.incident (column-level grant).
+grant usage on schema ops to agent_rw;
+grant select on all tables in schema ops to agent_rw;
+grant update (agent_diagnosis, triage_note_path) on ops.incident to agent_rw;
+
+revoke all on schema pii from public;
+grant usage on schema marts to pii_admin;
+alter default privileges for role dbt in schema marts grant select on tables to pii_admin;
+grant select on all tables in schema marts to pii_admin;

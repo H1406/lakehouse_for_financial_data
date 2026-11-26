@@ -102,7 +102,8 @@ def instrumented(source: str | None = None, entity: str | None = None) -> Callab
             try:
                 result = fn(*args, **kwargs)
             except BaseException as exc:
-                _run_finished(run_id, "failed", {}, exc)
+                # An exception may carry the counts it failed on (e.g. QuarantineRateExceeded), so alerts see them.
+                _run_finished(run_id, "failed", getattr(exc, "stats", {}) or {}, exc)
                 raise
             _run_finished(run_id, "success", result if isinstance(result, dict) else {}, None)
             return result
@@ -167,11 +168,20 @@ def on_failure_callback(context: dict) -> None:
     task_id = getattr(ti, "task_id", None)
     run_id = context.get("run_id")
     with connect() as conn:
-        incident_id = conn.execute(
+        # One incident per failed DAG run: 12 mapped extract tasks failing together is one outage, not 12.
+        # Atomic: the partial unique index incident_open_per_run makes concurrent callbacks (mapped tasks failing
+        # in the same second) insert exactly one row; the others hit `on conflict do nothing`.
+        row = conn.execute(
             """insert into ops.incident (alert_name, severity, dag_id, airflow_run_id, task_id)
-               values (%s, 'high', %s, %s, %s) returning incident_id""",
+               values (%s, 'high', %s, %s, %s)
+               on conflict (dag_id, airflow_run_id) where resolved_at is null and airflow_run_id is not null
+               do nothing
+               returning incident_id""",
             (f"task_failed:{dag_id}.{task_id}", dag_id, run_id, task_id),
-        ).fetchone()[0]
+        ).fetchone()
+    if row is None:
+        return
+    incident_id = row[0]
     url = settings().alert_webhook_url
     if url:
         text = f"[{datetime.now(UTC):%Y-%m-%d %H:%M}Z] incident {incident_id}: {dag_id}.{task_id} failed ({run_id})"

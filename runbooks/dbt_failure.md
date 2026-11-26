@@ -13,3 +13,9 @@
 
 ## Fix
 - Fix data upstream and rerun the source DAG (the asset triggers dbt again), or fix the model and run `make dbt-build`.
+
+## Freshness error on crypto_bars_1m
+`lake_silver.crypto_bars_1m` older than 120 min → the 15-minute copy DAG (`stream_silver_15m`) is not running (paused DAGs, Airflow down) or the stream itself stalled (see stream_stalled.md). Check `ops.pipeline_run` for `copy_bars_to_pg`.
+
+## Airflow 3: tasks failing with `TypeError: fromisoformat: argument must be str`
+A run created by `airflow dags trigger` or the UI has no logical date (`ds` is None). DAGs must use `common.run_date(dag_run)` / `common.RUN_DATE`, never `ds`.

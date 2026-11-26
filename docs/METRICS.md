@@ -20,3 +20,15 @@ Single source of truth for the marts. If a model's logic changes, update this fi
 | Period risk | avg/max `vol_20d` and worst drawdown over the last 91 days (quarter) or 365 days (FY) up to `period_end` | `mart_fact_sheet_inputs` |
 
 Concept → metric mapping lives in `dbt/seeds/concept_aliases.csv` (lowest `priority` wins per period).
+
+## Agent and retrieval metrics
+
+| Metric | Definition | Where |
+|---|---|---|
+| Precision@5 | relevant documents among the top 5 retrieved, / 5 (max 0.2 when a question has 1 relevant document) | `agents/eval/retrieval_eval.py` |
+| Recall@5 | relevant documents found in the top 5, / number of relevant documents | same |
+| MRR | mean of 1 / rank of the first relevant document (0 if none in the top 5) | same |
+| RRF score | sum over retrievers of 1 / (60 + rank) | `agents/retrieval/search.py` `rrf` |
+| QA cites-relevant rate | share of answers citing at least one labelled relevant fact sheet | `agents/eval/agent_eval.py` |
+| QA grounded rate | share of answers whose every citation was returned by a tool in that run | same |
+| Triage accuracy | injected faults whose diagnosed CATEGORY equals the expected one, out of 4 | same |

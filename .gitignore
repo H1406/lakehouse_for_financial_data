@@ -12,3 +12,4 @@ dbt/dbt_packages/
 spark-warehouse/
 metastore_db/
 dbt/.user.yml
+incidents/

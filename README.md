@@ -16,7 +16,7 @@ yfinance 1m ──> equity-producer ─┴─> Redpanda ─> Spark Structured St
 ops schema: pipeline_run · watermark · reconciliation · stream_metrics · incident · dbt_result
 ```
 
-**How every component works, with links to the code: [docs/COMPONENTS.md](docs/COMPONENTS.md)**
+**How every component works, with links to the code: [docs/COMPONENTS.md](docs/COMPONENTS.md)** · results: [docs/RESULTS.md](docs/RESULTS.md) · tuning: [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
 
 Full spec: [docs/PLAN.md](docs/PLAN.md) · status: [docs/PROGRESS.md](docs/PROGRESS.md) ·
 why: [docs/DECISIONS.md](docs/DECISIONS.md) · pins: [docs/VERSIONS.md](docs/VERSIONS.md) ·
@@ -49,6 +49,29 @@ it is complete and at least `QUOTE_DELAY_MINUTES` old (default 10; set it in `.e
 Everything downstream is genuinely streaming. Because Yahoo keeps days of 1-minute history, a restarted producer
 refills its own gap (measured: 0 missing minutes after a 3-minute outage). Spark MERGEs Silver on `(ticker, minute)`,
 so re-published bars are harmless. The feed is silent outside US market hours (about 14:30–21:00 UTC in winter).
+
+## Agents (DeepSeek)
+
+Two agents share one loop (`agents/core/loop.py`): reason → call read-only tools → observe → answer. Guardrails
+cap steps, tool calls, time and tokens, block repeated identical calls, truncate tool output, and force a final
+answer when a limit trips. Every run is logged to `agent.run_log`.
+
+| Agent | Command | Tools |
+|---|---|---|
+| Financial QA | `make ask Q="How did NVIDIA's revenue grow in fiscal 2027 Q2?"` | hybrid search over 370 fact sheets (pgvector + full-text, RRF); guarded NL-SQL on `marts` |
+| Incident triage | `make triage INCIDENT=<id>` → `incidents/<id>.md` | failed runs, reconciliation, stream metrics, dbt results, Airflow task logs, runbooks |
+
+Set `DEEPSEEK_API_KEY` in `.env`. `make fault FAULT=api_500|schema_change|duplicate_batch|stream_stop` injects a real
+fault, and `make eval` scores retrieval (no LLM), QA answers and triage diagnoses.
+
+## Local UIs (all bound to 127.0.0.1)
+
+| URL | What |
+|---|---|
+| http://localhost:8080 | Airflow 3 |
+| http://localhost:3000 | Grafana (admin / `GRAFANA_ADMIN_PASSWORD`): dashboard + 6 alert rules |
+| http://localhost:8501 | data browser (Postgres, Iceberg tables and files) |
+| http://localhost:8090 | agents service (`/ask`, `/triage`, `/fact-sheets/refresh`, `/grafana-webhook`) |
 
 ## Guarantees
 

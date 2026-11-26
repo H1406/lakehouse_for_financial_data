@@ -13,7 +13,9 @@ registry again, and keep the Spark/Iceberg/Kafka rules below.
 | Warehouse | `pgvector/pgvector:0.8.7-pg16` | PostgreSQL 16 + pgvector 0.8.7 |
 | Airflow base | `apache/airflow:3.3.2-python3.12` | Debian bookworm, + `openjdk-17-jre-headless` (17.0.21) |
 | Spark stream base | `apache/spark:4.0.5-scala2.13-java17-python3-ubuntu` | **Python 3.10** inside: code it imports must not use 3.11+ features |
-| Producer base | `python:3.12-slim` | |
+| Producer base | `python:3.12-slim` | both feeds (Binance + delayed yfinance) |
+| Agents base | `python:3.12-slim` | + torch 2.15.0 (CPU wheel index), sentence-transformers 6.3.0, model `all-MiniLM-L6-v2` baked in |
+| Grafana | `grafana/grafana:13.2.7` | datasource, dashboard and alert rules provisioned from `infra/grafana/provisioning` |
 
 ## JARs (baked into images, never `--packages`)
 
@@ -52,3 +54,6 @@ equal the Spark version. Iceberg 1.12 ships runtimes for Spark 3.5, 4.0 and 4.1 
 | dbt-core / dbt-postgres | 1.12.7 / 1.11.0 | separate venv in the airflow image (`~/dbt-venv`) |
 | dbt_utils | 1.4.1 | dbt package |
 | pytest / ruff | 9.2.0 / 0.17.6 | dev |
+| sqlglot / jinja2 / pyyaml | 30.35.0 / 3.1.6 / 6.0.4 | agents image, dev |
+| torch / sentence-transformers | 2.15.0+cpu / 6.3.0 | agents image only |
+| LLM | DeepSeek API, model `deepseek-flash` (configurable `DEEPSEEK_MODEL`, e.g. `deepseek-v4-pro`), thinking mode | checked against api-docs.deepseek.com on 2026-11-26 |

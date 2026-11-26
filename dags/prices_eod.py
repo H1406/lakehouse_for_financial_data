@@ -4,7 +4,7 @@ from datetime import date, datetime
 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import Param, dag, task
-from common import DEFAULT_ARGS, SILVER_PRICES, spark_submit
+from common import DEFAULT_ARGS, RUN_DATE, SILVER_PRICES, run_date, spark_submit
 
 from lakehouse import universe
 from lakehouse.ingestion import tasks as ing
@@ -20,8 +20,8 @@ def build(dag_id: str, source: str, schedule: str | None, params: dict) -> None:
             return [r["ticker"] for r in universe.load("equity")]
 
         @task(max_active_tis_per_dagrun=4)
-        def extract_prices(ticker: str, ds=None, params=None) -> str:
-            ld = date.fromisoformat(ds)
+        def extract_prices(ticker: str, dag_run=None, params=None) -> str:
+            ld = run_date(dag_run)
             if params.get("start"):
                 start, end = date.fromisoformat(params["start"]), date.fromisoformat(params["end"])
             else:
@@ -29,26 +29,26 @@ def build(dag_id: str, source: str, schedule: str | None, params: dict) -> None:
             return ing.extract_prices(ticker=ticker, start=start, end=end, logical_date=ld, source=source)
 
         @task
-        def validate_and_land_bronze(paths: list[str], ds=None, run_id=None) -> list[str]:
-            ing.land_prices_bronze(paths=list(paths), logical_date=date.fromisoformat(ds), run_id=run_id,
+        def validate_and_land_bronze(paths: list[str], dag_run=None, run_id=None) -> list[str]:
+            ing.land_prices_bronze(paths=list(paths), logical_date=run_date(dag_run), run_id=run_id,
                                    source=source)
             return list(paths)
 
         @task
-        def reconcile_source_bronze(paths: list[str], ds=None, run_id=None) -> None:
-            ing.reconcile_prices_source_bronze(paths=paths, logical_date=date.fromisoformat(ds), run_id=run_id,
+        def reconcile_source_bronze(paths: list[str], dag_run=None, run_id=None) -> None:
+            ing.reconcile_prices_source_bronze(paths=paths, logical_date=run_date(dag_run), run_id=run_id,
                                                source=source)
 
         # Bronze -> Silver reconciliation runs inside the Spark job (saves a second JVM start).
         to_silver = BashOperator(
             task_id="spark_bronze_to_silver_prices",
             bash_command=spark_submit("bronze_to_silver_prices",
-                                      f"--logical-date {{{{ ds }}}} --run-id '{{{{ run_id }}}}' --source {source}"),
+                                      "--logical-date " + RUN_DATE + " --run-id '{{ run_id }}' --source " + source),
         )
 
         @task(outlets=[SILVER_PRICES])
-        def copy_silver_to_pg(ds=None, run_id=None) -> dict:
-            return copy_table(table="prices_eod", run_id=run_id, logical_date=ds)
+        def copy_silver_to_pg(dag_run=None, run_id=None) -> dict:
+            return copy_table(table="prices_eod", run_id=run_id, logical_date=run_date(dag_run))
 
         landed = validate_and_land_bronze(extract_prices.expand(ticker=tickers()))
         reconcile_source_bronze(landed) >> to_silver >> copy_silver_to_pg()
