@@ -30,12 +30,14 @@ Measured on a laptop (Docker VM: 8 CPUs, 7.6 GiB) between 2026-11-25 and 2026-11
 - Retrieval over 375 documents (370 fact sheets + 5 runbooks) / 2,603 chunks (pgvector HNSW + Postgres full-text, RRF), 18 labelled questions:
   recall@5 **0.819** hybrid vs 0.764 vector-only vs 0.681 text-only; MRR **0.701** vs 0.459 vs 0.525.
 - Incremental embedding: a no-change refresh embeds 0 documents; a data fix re-embedded exactly the 94 changed sheets.
-- QA answers and triage diagnoses with the live LLM: see `docs/eval/agent_eval.json` (pending a DeepSeek API key;
-  filled in by `make eval`).
+- QA agent with the live LLM (`deepseek-flash`, 18 questions): **18/18** cite a relevant fact sheet, all citations
+  grounded, expected numbers present; median 2.8 s and ~2.9k tokens per answer.
+- Triage agent: **4/4** injected faults diagnosed correctly, median 28 s to a written note (first run 3/4; fixed by
+  adding evidence, not by changing the model).
 - Fault injection: 4 faults, each produced exactly one real incident (14–401 s after injection).
 
 ## Engineering
-- 55 unit tests (no network, no Docker), 10 integration tests (security + idempotency), ruff clean.
+- 65 unit tests (no network, no Docker), 10 integration tests (security + idempotency), ruff clean.
 - Real defects found and fixed by running the system: Bronze wiped by a 100 %-quarantined run, Yahoo provisional bars,
   Airflow 3 manual runs without a logical date, a false restatement flag on 3 companies, non-atomic incident dedupe,
   failed runs losing their counts, maintenance vs stream commit races.
