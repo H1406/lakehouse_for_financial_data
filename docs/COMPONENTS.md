@@ -731,22 +731,32 @@ matched nothing, so the mart stayed empty forever while every test passed.
 
 ## 11. Data browser
 
-**Code:** [scripts/data_browser.py](../scripts/data_browser.py) · `make browse` → http://localhost:8501
+**Code:** [scripts/data_browser.py](../scripts/data_browser.py) (server + JSON API) ·
+[scripts/data_browser_ui/](../scripts/data_browser_ui/) (vanilla JS + inline SVG, no build step) ·
+[src/lakehouse/lineage.py](../src/lakehouse/lineage.py) (the lineage graph) · `make browse` → http://localhost:8501
 
-A standard-library `http.server` app, with no new dependencies. Pages:
+A standard-library `http.server` app, with no new Python or JS dependencies. Views:
 
-| URL | Shows | Function |
+| Route | Shows | API |
 |---|---|---|
-| `/` | every Postgres table with row counts; every Iceberg table with records, files, size | [`overview`](../scripts/data_browser.py#L62) |
-| `/pg?schema=&table=` | columns and first rows | [`pg_table`](../scripts/data_browser.py#L100) |
-| `/iceberg?table=ns.t` | schema, partition spec, last 10 snapshots, data files (linked), first rows | [`iceberg_table`](../scripts/data_browser.py#L115) |
-| `/files?root=s3\|local&path=` | directory listing; Parquet preview (first rows); JSON/CSV first 64 KB | [`files`](../scripts/data_browser.py#L148) |
+| `#/` Flow map | every table and hop, source → Bronze → Silver → Postgres → dbt → marts → agents, with live stats per node; hover traces lineage, click opens a node or hop; batch hops coloured by their latest `ops.reconciliation` check | [`/api/flow`](../scripts/data_browser.py#L130) |
+| `#/storage` Storage map | treemaps of Iceberg live bytes (by namespace) and Postgres bytes (by schema); on-disk vs live bytes per Iceberg table | `/api/flow`, [`/api/dirsize`](../scripts/data_browser.py#L392) |
+| `#/files/s3\|local/<path>` | directory listing with size bars; Parquet footer (row groups, column chunks: codec, encodings, min/max) + rows; JSON/text; Avro role; owning Iceberg table | [`/api/files`](../scripts/data_browser.py#L325) |
+| `#/iceberg/<ns.t>` | storage diagram (metadata.json → manifest list → manifests → data files), file-size histogram, partitions, schema, snapshots, manifests, data files, rows | [`/api/iceberg`](../scripts/data_browser.py#L261) |
+| `#/pg/<schema.t>` | size, primary key, lineage, columns, paged rows | [`/api/pg`](../scripts/data_browser.py#L216) |
+| `#/agent` Agent knowledge | fact-sheet coverage (ticker × period), runbooks, documents; a document's chunks with embedding preview; a chunk's nearest neighbours by stored embedding | [`/api/agent/*`](../scripts/data_browser.py#L410) |
+| `#/runs` Agent runs | every QA/triage run; a run's timeline and the exact chunks each search returned (rank, RRF score) | [`/api/agent/runs`, `/api/agent/run`](../scripts/data_browser.py#L475) |
+
+Lineage: dbt hops come from dbt's own `target/manifest.json` (mounted read-only); hops dbt can't see (APIs, Spark,
+streams, agents) are declared once in [`UPSTREAM`](../src/lakehouse/lineage.py#L53), each naming the job that runs it.
+The old `/pg?…`, `/iceberg?…` and `/files?…` URLs redirect to the new views, so runbook links still work.
 
 Safety: Postgres sessions are `default_transaction_read_only=on` with a 10 s statement timeout
-([L41](../scripts/data_browser.py#L41)). Table names are checked against `information_schema` and a schema allowlist
-before use ([L105](../scripts/data_browser.py#L105)). Local paths can't escape `data/`
-([L151](../scripts/data_browser.py#L151)), which is also mounted read-only. The port is bound to `127.0.0.1` because the
-page has no auth.
+([L70](../scripts/data_browser.py#L70)). Only allowlisted schemas are browsable (`pii` is not,
+[L217](../scripts/data_browser.py#L217)), and table names are checked against `information_schema` first. Local paths
+can't escape `data/` ([L113](../scripts/data_browser.py#L113)), which is also mounted read-only. The UI renders API data
+with `textContent` only and is served with a `default-src 'self'` CSP ([L577](../scripts/data_browser.py#L577)). The
+port is bound to `127.0.0.1` because the page has no auth.
 
 ---
 
