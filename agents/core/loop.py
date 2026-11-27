@@ -62,6 +62,13 @@ def _assistant_message(msg: dict) -> dict:
     return out
 
 
+def _json_or_text(text: str | None) -> object:
+    try:
+        return json.loads(text or "{}")
+    except ValueError:
+        return text
+
+
 def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[:limit] + f"\n...(truncated {len(text) - limit} chars)"
 
@@ -110,8 +117,12 @@ def run_agent(*, system: str, user: str, tools: list[Tool], llm, guard: Guardrai
         except LLMError as exc:
             return finish(f"(stopped by guardrail '{reason}'; final answer failed: {exc})", reason)
 
-    def execute(call: dict) -> str:
+    def execute(call: dict) -> tuple[str, object]:
+        """Run one tool call -> (text sent to the model, structured output for the run log)."""
         nonlocal blocked
+
+        def both(message: str) -> tuple[str, str]:
+            return message, message
         name = call["function"]["name"]
         try:
             args = json.loads(call["function"].get("arguments") or "{}")
@@ -119,21 +130,21 @@ def run_agent(*, system: str, user: str, tools: list[Tool], llm, guard: Guardrai
                 raise ValueError("arguments must be a JSON object")
         except ValueError as exc:
             result.tool_calls.append({"name": name, "args": None, "ok": False, "blocked": False})
-            return f"ERROR: arguments are not valid JSON ({exc}). Retry with a JSON object."
+            return both(f"ERROR: arguments are not valid JSON ({exc}). Retry with a JSON object.")
         record = {"name": name, "args": args, "ok": False, "blocked": False}
         result.tool_calls.append(record)
         signature = name + json.dumps(args, sort_keys=True, default=str)
         if name not in registry:
-            return f"ERROR: unknown tool '{name}'. Available: {sorted(registry)}"
+            return both(f"ERROR: unknown tool '{name}'. Available: {sorted(registry)}")
         if seen[signature] >= guard.max_repeats:
             blocked += 1
             record["blocked"] = True
-            return ("BLOCKED by guardrail: this exact call was already made in this run. Reuse its result, "
-                    "change the arguments, or give the final answer.")
+            return both("BLOCKED by guardrail: this exact call was already made in this run. Reuse its result, "
+                        "change the arguments, or give the final answer.")
         if sum(1 for c in result.tool_calls if not c["blocked"]) > guard.max_tool_calls:
             blocked += 1
             record["blocked"] = True
-            return "BLOCKED by guardrail: tool-call budget exhausted. Give the final answer now."
+            return both("BLOCKED by guardrail: tool-call budget exhausted. Give the final answer now.")
         seen[signature] += 1
         try:
             output = registry[name].fn(**args)
@@ -141,7 +152,7 @@ def run_agent(*, system: str, user: str, tools: list[Tool], llm, guard: Guardrai
         except Exception as exc:  # noqa: BLE001 - a failing tool is evidence, not a crash
             output = f"ERROR: {type(exc).__name__}: {scrub(str(exc), max_len=500)}"
         text = output if isinstance(output, str) else json.dumps(output, default=str)
-        return _truncate(text, guard.max_tool_output_chars)
+        return _truncate(text, guard.max_tool_output_chars), output
 
     while True:
         if result.steps >= guard.max_steps:
@@ -158,10 +169,13 @@ def run_agent(*, system: str, user: str, tools: list[Tool], llm, guard: Guardrai
         if not calls:
             return finish(msg.get("content") or "", "final")
         for call in calls:
-            output = execute(call)
+            output, raw = execute(call)
             result.tool_outputs.append(output)
+            # Log the structured output (e.g. the retrieved chunks with doc_id/section/score), not the text, so
+            # the run log keeps its shape after scrubbing. Plain-text outputs (errors, blocks) are cut at 4000.
             trace("tool", result.steps, call["function"]["name"],
-                  {"arguments": call["function"].get("arguments"), "output": output[:4000]})
+                  {"arguments": _json_or_text(call["function"].get("arguments")),
+                   "output": raw[:4000] if isinstance(raw, str) else raw, "output_chars": len(output)})
             messages.append({"role": "tool", "tool_call_id": call["id"], "content": output})
         if blocked >= guard.max_blocked:
             return forced_final("blocked_calls")
