@@ -69,7 +69,8 @@ waiting on something named in the note.
       (HMAC keys, `pii_admin`-only notifier, 4 roles proven denied)
 
 ## Day 7 Hardening
-- [ ] Tests + CI green. Locally: ruff clean, 55 unit + 10 integration tests pass. CI on GitHub: runs once this branch is pushed.
+- [x] Tests + CI green. Locally: ruff clean, 65 unit + 10 integration tests pass. GitHub CI green on `main` and on
+      `stage-3-triage-evidence` (84f5416, run 45955412610).
 - [ ] README + screenshots: README updated; screenshots not taken (no headless browser here)
 - [x] CV numbers collected: docs/RESULTS.md
 
