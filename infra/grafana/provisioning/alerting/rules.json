@@ -126,10 +126,12 @@
      "noDataState": "OK",
      "execErrState": "Error",
      "labels": {
-      "severity": "high"
+      "severity": "high",
+      "query_name": "bronze_trades",
+      "topic": "crypto_trades"
      },
      "annotations": {
-      "summary": "No crypto trades for > 5 minutes",
+      "summary": "No CRYPTO trades (Binance -> topic crypto_trades, query bronze_trades) for > 5 minutes",
       "runbook_url": "https://github.com/H1406/lakehouse_for_financial_data/blob/main/runbooks/stream_stalled.md"
      },
      "data": [

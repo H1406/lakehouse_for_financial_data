@@ -53,7 +53,9 @@ def parse_daily(ticker: str, records: list[dict]) -> tuple[list[dict], list[dict
     if not records:
         return [], []
     if set(records[0]) != set(YAHOO_DAILY_COLUMNS):
-        reason = f"column mismatch: expected {sorted(YAHOO_DAILY_COLUMNS)}, got {sorted(records[0])}"
+        # Unquoted names: the scrubber masks quoted text, and these names are the diagnosis.
+        reason = (f"column mismatch: expected {', '.join(sorted(YAHOO_DAILY_COLUMNS))}; "
+                  f"got {', '.join(sorted(records[0]))}")
         return [], [{"entity": ticker, "reason": reason, "_payload": json.dumps(r, sort_keys=True)} for r in records]
 
     # The most recent daily bar can be provisional: Yahoo serves it with Open/High/Low/Volume but no Close for

@@ -5,6 +5,7 @@ Laptop simplification: in production the staging area would be an object-store p
 """
 
 import json
+from collections import Counter
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -56,11 +57,16 @@ def _parse_price_files(paths: list[str]) -> tuple[list[dict], list[dict]]:
     return valid, bad
 
 
-def _check_quarantine_rate(n_valid: int, n_bad: int) -> None:
-    total = n_valid + n_bad
+def _check_quarantine_rate(n_valid: int, bad: list[dict]) -> None:
+    """Fail the run above 5 %. The message carries the most common reasons, so whoever reads ops.pipeline_run
+    (an engineer, Grafana, the triage agent) sees WHY without opening the quarantine table."""
+    n_bad, total = len(bad), n_valid + len(bad)
     if total and n_bad / total > MAX_QUARANTINE_RATE:
-        raise QuarantineRateExceeded(f"quarantine rate {n_bad}/{total} exceeds {MAX_QUARANTINE_RATE:.0%}",
-                                     {"rows_read": total, "rows_written": 0, "rows_quarantined": n_bad})
+        top = Counter(b["reason"][:400] for b in bad).most_common(3)  # a cut mid-name reads as another rename
+        reasons = "; ".join(f"{n}x {reason}" for reason, n in top)
+        raise QuarantineRateExceeded(
+            f"quarantine rate {n_bad}/{total} exceeds {MAX_QUARANTINE_RATE:.0%}. Top reasons: {reasons}",
+            {"rows_read": total, "rows_written": 0, "rows_quarantined": n_bad})
 
 
 @instrumented(source="yfinance", entity="prices_eod")
@@ -69,7 +75,7 @@ def land_prices_bronze(*, paths: list[str], logical_date: date, run_id: str, sou
     write_quarantine(bad, source=source, entity=None, logical_date=logical_date, run_id=run_id)
     # Check *before* touching Bronze: a 100 %-quarantined run (schema drift) must fail without replacing the
     # slice with nothing. The rejected rows are already in quarantine, so they stay inspectable.
-    _check_quarantine_rate(len(valid), len(bad))
+    _check_quarantine_rate(len(valid), bad)
     written = overwrite_slice(PRICES_TABLE, valid, source=source, logical_date=logical_date,
                               run_id=run_id, payload_col="_raw_line")
     if valid:
@@ -122,7 +128,7 @@ def land_edgar_bronze(*, fetched: list[dict], logical_date: date, run_id: str, s
     ciks = [f["cik"] for f in fetched]
     for b in bad:
         write_quarantine([b], source=source, entity=b["entity"], logical_date=logical_date, run_id=run_id)
-    _check_quarantine_rate(len(valid), len(bad))  # before overwriting Bronze (see land_prices_bronze)
+    _check_quarantine_rate(len(valid), bad)  # before overwriting Bronze (see land_prices_bronze)
     written = overwrite_slice(FACTS_TABLE, valid, source=source, logical_date=logical_date, run_id=run_id,
                               payload_col="_payload", cik=ciks)
     for f in fetched:

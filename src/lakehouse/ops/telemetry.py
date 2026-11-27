@@ -167,17 +167,21 @@ def on_failure_callback(context: dict) -> None:
     dag_id = getattr(context.get("dag"), "dag_id", None)
     task_id = getattr(ti, "task_id", None)
     run_id = context.get("run_id")
+    exc = context.get("exception")
+    details = {"source": "airflow", "map_index": getattr(ti, "map_index", None),
+               "try_number": getattr(ti, "try_number", None),
+               "exception": f"{type(exc).__name__}: {scrub(str(exc), max_len=800)}" if exc else None}
     with connect() as conn:
         # One incident per failed DAG run: 12 mapped extract tasks failing together is one outage, not 12.
         # Atomic: the partial unique index incident_open_per_run makes concurrent callbacks (mapped tasks failing
         # in the same second) insert exactly one row; the others hit `on conflict do nothing`.
         row = conn.execute(
-            """insert into ops.incident (alert_name, severity, dag_id, airflow_run_id, task_id)
-               values (%s, 'high', %s, %s, %s)
+            """insert into ops.incident (alert_name, severity, dag_id, airflow_run_id, task_id, details)
+               values (%s, 'high', %s, %s, %s, %s::jsonb)
                on conflict (dag_id, airflow_run_id) where resolved_at is null and airflow_run_id is not null
                do nothing
                returning incident_id""",
-            (f"task_failed:{dag_id}.{task_id}", dag_id, run_id, task_id),
+            (f"task_failed:{dag_id}.{task_id}", dag_id, run_id, task_id, json.dumps(details)),
         ).fetchone()
     if row is None:
         return

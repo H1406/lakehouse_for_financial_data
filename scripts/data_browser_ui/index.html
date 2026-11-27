@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lakehouse explorer</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/">Lakehouse explorer</a>
+    <nav id="nav">
+      <a href="#/" data-tab="map">Flow map</a>
+      <a href="#/storage" data-tab="storage">Storage map</a>
+      <a href="#/files/s3/" data-tab="files">Files</a>
+      <a href="#/agent" data-tab="agent">Agent knowledge</a>
+      <a href="#/runs" data-tab="runs">Agent runs</a>
+    </nav>
+    <span id="status" class="muted small"></span>
+  </header>
+  <main id="app"></main>
+  <div id="tip" class="tip" hidden></div>
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>

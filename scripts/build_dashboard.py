@@ -88,8 +88,8 @@ def dashboard() -> dict:
 
 
 def rule(uid: str, title: str, sql: str, op: str, threshold: float, severity: str, runbook: str, summary: str,
-         dag_id: str | None = None, no_data: str = "OK") -> dict:
-    labels = {"severity": severity}
+         dag_id: str | None = None, no_data: str = "OK", extra_labels: dict | None = None) -> dict:
+    labels = {"severity": severity, **(extra_labels or {})}
     if dag_id:
         labels["dag_id"] = dag_id
     return {
@@ -124,7 +124,9 @@ def alert_rules() -> dict:
         rule("stream_stalled", "Stream stalled",
              "select coalesce(extract(epoch from now() - max(written_at)) / 60, 9999) as minutes "
              "from ops.stream_metrics where query_name = 'bronze_trades' and events > 0",  # heartbeats have 0
-             "gt", 5, "high", "stream_stalled", "No crypto trades for > 5 minutes"),
+             "gt", 5, "high", "stream_stalled",
+             "No CRYPTO trades (Binance -> topic crypto_trades, query bronze_trades) for > 5 minutes",
+             extra_labels={"query_name": "bronze_trades", "topic": "crypto_trades"}),
         rule("reconciliation_mismatch", "Reconciliation mismatch",
              "select count(*) as mismatches from ops.reconciliation "
              "where status = 'mismatch' and checked_at > now() - interval '24 hours'",

@@ -55,3 +55,20 @@ def test_missing_close_on_an_older_bar_is_still_quarantined():
     rows = [({**r, "Close": None, "Adj Close": None} if r["Date"] == oldest else r) for r in rows]
     valid, bad = parse_daily("AAPL", rows)
     assert len(valid) == 2 and len(bad) == 1
+
+
+def test_quarantine_failure_names_its_top_reasons():
+    import pytest
+
+    from lakehouse.ingestion.tasks import QuarantineRateExceeded, _check_quarantine_rate
+    from lakehouse.ops import scrub
+
+    rows = [{("AdjClose" if k == "Adj Close" else k): v for k, v in r.items()} for r in daily_fixture()[:4]]
+    _, bad = parse_daily("AAPL", rows)
+    with pytest.raises(QuarantineRateExceeded) as e:
+        _check_quarantine_rate(0, bad)
+    msg = scrub(str(e.value))  # what ops.pipeline_run (and the triage agent) will actually see
+    assert "4/4" in msg and "Top reasons: 4x column mismatch" in msg
+    assert "Adj Close" in msg and "AdjClose" in msg  # unquoted, so the scrubber keeps the evidence
+    assert msg.rstrip().endswith("Stock Splits, Volume")  # never cut mid-name
+    assert e.value.stats["rows_quarantined"] == 4

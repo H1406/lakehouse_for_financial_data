@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-11-26 (session 3). An item is ticked only when its PLAN.md §13 acceptance criterion was
+Last updated: 2026-11-26 (session 4: live-LLM evaluation). An item is ticked only when its PLAN.md §13 acceptance criterion was
 demonstrated against the running stack. "Built" means the code exists, is unit-tested where possible, and is
 waiting on something named in the note.
 
@@ -53,19 +53,50 @@ waiting on something named in the note.
 ## Day 6 Agents
 - [x] Fact sheets + incremental embeddings: 370 sheets + 5 runbooks → 2,603 chunks (pgvector HNSW + tsvector GIN);
       re-embeds only changed `content_hash` (0 on a no-op refresh; 94 after a data fix)
-- [ ] QA agent + eval metrics. Retrieval metrics done (recall@5 0.819 hybrid vs 0.764 / 0.681; MRR 0.701).
-      Agent answers with the live LLM: **pending a DeepSeek API key** (`make eval`).
-- [ ] Triage agent + runbooks + 4 fault results. Agent, 8 read-only tools, 5 runbooks, `inject_fault.py` with all 4 faults
-      done; each produced exactly one real incident (19, 20, 24, 25). Diagnoses: **pending a DeepSeek API key**.
+- [x] QA agent + eval metrics. Retrieval: recall@5 0.819 hybrid vs 0.764 vector / 0.681 text, MRR 0.701.
+      Live LLM (`deepseek-flash`, 18 questions): cites a relevant fact sheet 18/18, every citation grounded 18/18,
+      expected numbers present 18/18, no guardrail stops; median 2.8 s and ~2.9k tokens per question.
+      (First run: 17/18 by the metric; the "miss" was a correct answer cited from SQL instead of a fact sheet.)
+- [x] Triage agent + runbooks + 4 fault results: **4/4 correct**, median 28 s to a note.
+      First run was 3/4: schema change was misread as an API outage (no quarantine reasons visible), and stream stop
+      got the right label for the wrong reason (the incident did not say which stream). Fixed by giving the agent
+      the evidence: top quarantine reasons in the error, alert labels/summary in `ops.incident.details`
+      (DECISIONS: "Triage evidence"). After the fix, those two took 13 s and 17 s (was 34 s and 51 s).
+      Bonus real incidents (not scored): #6 provisional bar → data_freshness, #18 maintenance race → infrastructure,
+      #21 Airflow 3 `ds` bug → infrastructure, #47 overnight freshness failure → infrastructure (stopped by the
+      `blocked_calls` guardrail, still produced a usable note).
 - [x] (stretch) NL-SQL tool (sqlglot guard + `agent_ro` + read-only + timeout + limit; 16 guard tests) and PII separation
       (HMAC keys, `pii_admin`-only notifier, 4 roles proven denied)
 
 ## Day 7 Hardening
-- [ ] Tests + CI green. Locally: ruff clean, 55 unit + 10 integration tests pass. CI on GitHub: runs once this branch is pushed.
+- [x] Tests + CI green. Locally: ruff clean, 65 unit + 10 integration tests pass. GitHub CI green on `main` and on
+      `stage-3-triage-evidence` (84f5416, run 45955412610).
 - [ ] README + screenshots: README updated; screenshots not taken (no headless browser here)
 - [x] CV numbers collected: docs/RESULTS.md
 
+## Data browser v2 (2026-11-26)
+- [x] Flow map (53 nodes, 72 hops; dbt lineage from `manifest.json`, 9 batch hops coloured by `ops.reconciliation`),
+      storage map (treemaps + on-disk vs live bytes), file browser with Parquet footer/column-chunk view, Iceberg
+      storage diagram + file-size histogram, agent knowledge base (coverage, chunks, embedding neighbours), agent runs
+      with retrieved chunks. Every view exercised against the live stack with a DOM stub (no headless browser renders
+      here); `pii` refused, `../` refused, legacy URLs redirect.
+- [x] `agent.run_log` keeps structure after scrubbing (`scrub_tree`); tool events log structured output. Unit tests:
+      `test_trace.py`, `test_lineage.py`, loop test. 65 unit tests pass.
+- [ ] Restart the `agents` container so new runs use the fixed logging, then confirm one QA run's retrieved chunks
+      show in `#/runs/<id>`. The 70 searches logged before the fix stay unreadable (labelled "before fix").
+- [ ] Screenshot for the README: take it from a real browser.
+
 ## Open items
-- DeepSeek key → `make eval` (QA answers + triage on incidents 19, 20, 24, 25; bonus real incidents 6, 18).
+- **Overnight scheduler backlog (found 2026-11-26):** `stream_silver_15m` fell hours behind; 7 `spark_dedup_trades`
+  runs are stuck in `running` with no failure row (likely killed, e.g. out of memory), so bar copies stalled and
+  `dbt_source_freshness` failed ~hourly (11 incidents, 05:53–15:16 UTC). The triage agent reached the same reading
+  (#47). Next: find why the dedup JVMs die (memory with the agents container + stream running), then cap
+  concurrency (`max_active_runs=1` is set; also a task timeout) so a hung run cannot block the queue.
+- `.env` sets `DEEPSEEK_MODEL=deepseek-flash-v4`, which DeepSeek rejects (HTTP 400): use `deepseek-flash` or
+  `deepseek-v4-pro`. The eval ran with an override.
+- After review: `make fault-cleanup FAULT=duplicate_batch` (Bronze slice 2026-11-24 still holds duplicates; Silver is
+  unaffected), then resolve the open eval incidents.
+- Note 64 claims `Stock Splits` was renamed too: false, caused by cutting the reason at 160 characters mid-name.
+  Fixed (limit 400 + a test); the stored message for #64 keeps the old cut.
 - Merge-on-read for `silver.financial_facts` + rewriting position deletes in maintenance (PERFORMANCE.md).
 - Fresh-clone timing test (`make build up init backfill` < 10 min): not run; it needs the running stack stopped.

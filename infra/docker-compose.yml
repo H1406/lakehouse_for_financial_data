@@ -119,6 +119,7 @@ services:
       - ../src:/opt/lakehouse/src
       - ../scripts:/opt/lakehouse/scripts
       - ../data:/opt/lakehouse/data:ro
+      - ../dbt/target:/opt/lakehouse/dbt/target:ro  # manifest.json -> dbt lineage on the flow map
     depends_on:
       postgres: {condition: service_healthy}
       iceberg-rest: {condition: service_started}

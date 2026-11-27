@@ -40,9 +40,15 @@ def incidents_from_grafana(payload: dict) -> list[int]:
                 "and detected_at > now() - interval '1 hour'", (name,)).fetchone()
             if open_:
                 continue
+            # Keep the alert's own words: WHICH stream / ticker / rule fired and why. Without them the triage agent
+            # only sees the rule's name (it once blamed the closed equity market for a stopped crypto feed).
+            details = {"source": "grafana", "labels": labels, "summary": a.get("annotations", {}).get("summary"),
+                       "runbook_url": a.get("annotations", {}).get("runbook_url"), "values": a.get("values"),
+                       "starts_at": a.get("startsAt")}
             ids.append(conn.execute(
-                "insert into ops.incident (alert_name, severity, dag_id) values (%s, %s, %s) returning incident_id",
-                (name, labels.get("severity", "high"), labels.get("dag_id"))).fetchone()[0])
+                "insert into ops.incident (alert_name, severity, dag_id, details) values (%s, %s, %s, %s::jsonb) "
+                "returning incident_id",
+                (name, labels.get("severity", "high"), labels.get("dag_id"), json.dumps(details))).fetchone()[0])
     return ids
 
 

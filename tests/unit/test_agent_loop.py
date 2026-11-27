@@ -89,3 +89,18 @@ def test_tool_output_is_truncated():
     llm = FakeLLM([{"content": "", "tool_calls": [call("big", {})]}, {"content": "ok"}])
     r = run_agent(system="s", user="u", tools=[big], llm=llm, guard=Guardrails(max_tool_output_chars=100))
     assert len(r.tool_outputs[0]) < 200 and "truncated" in r.tool_outputs[0]
+
+
+def test_tool_event_logs_structured_output_for_the_run_log():
+    events = []
+
+    def trace(event, step=None, tool_name=None, payload=None):
+        events.append((event, tool_name, payload))
+
+    llm = FakeLLM([{"content": "", "tool_calls": [call("echo", {"text": "hi"})]}, {"content": "done"}])
+    run_agent(system="s", user="u", tools=[echo_tool([])], llm=llm, trace=trace)
+    (_, name, payload), = [e for e in events if e[0] == "tool"]
+    assert name == "echo"
+    assert payload["arguments"] == {"text": "hi"}          # parsed, not a JSON string
+    assert payload["output"] == {"echo": "hi"}             # the tool's own structure, not text
+    assert payload["output_chars"] == len('{"echo": "hi"}')

@@ -1,0 +1,464 @@
+{
+ "qa": {
+  "questions": 18,
+  "cites_relevant_rate": 1.0,
+  "grounded_rate": 1.0,
+  "expect_ok_rate": 1.0,
+  "stopped_final_rate": 1.0,
+  "median_seconds": 2.775,
+  "median_tokens": 2914.5,
+  "rows": [
+   {
+    "q": "What was NVIDIA's revenue in fiscal 2027 Q2?",
+    "answer": "NVIDIA's revenue in fiscal 2027 Q2 (quarter ended 2026-07-26) was **$96.22 billion**, up 17.9% QoQ and 105.9% YoY [NVDA-2027-Q2].",
+    "citations": [
+     "NVDA-2027-Q2"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 6.95,
+    "tokens": 2677
+   },
+   {
+    "q": "How much net income did Apple make in its fiscal year 2026?",
+    "answer": "Apple reported **net income of $132.18 billion** for fiscal year 2026, which ended **2026-09-26** [AAPL-2026-FY]. That was up **18.0% year over year** [AAPL-2026-FY].",
+    "citations": [
+     "AAPL-2026-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.66,
+    "tokens": 2742
+   },
+   {
+    "q": "What was Microsoft's operating margin in the first quarter of fiscal 2027?",
+    "answer": "Microsoft\u2019s operating margin in fiscal 2027 Q1 (quarter ended **2026-09-30**) was **49.8%**, based on **$45.91 billion** operating income on **$92.28 billion** revenue [MSFT-2027-Q1].",
+    "citations": [
+     "MSFT-2027-Q1"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.29,
+    "tokens": 2937
+   },
+   {
+    "q": "How fast did Walmart's revenue grow year over year in fiscal 2026?",
+    "answer": "Walmart's revenue grew **+4.7% year over year in fiscal 2026** (fiscal year ended 2026-01-31), reaching $713.16 billion [WMT-2026-FY]. For context, net income grew faster at +12.6% YoY over the same period [WMT-2026-FY].",
+    "citations": [
+     "WMT-2026-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.99,
+    "tokens": 2687
+   },
+   {
+    "q": "What diluted EPS did JPMorgan Chase report for Q3 2026?",
+    "answer": "JPMorgan Chase reported **diluted EPS of $5.57** for FY2026 Q3 (period ended 2026-09-30), alongside net income of $15.30 billion on $50.17 billion of revenue [JPM-2026-Q3].",
+    "citations": [
+     "JPM-2026-Q3"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.41,
+    "tokens": 2614
+   },
+   {
+    "q": "What is Exxon Mobil's debt to equity ratio in Q3 2026?",
+    "answer": "**ExxonMobil Q3 FY2026 (period ended 2026-09-30): debt-to-equity = 0.75** (total liabilities / equity) [XOM-2026-Q3].\n\n- Total liabilities: $198.40 billion; stockholders' equity: $265.79 billion [XOM-2026-Q3]\n- Same quarter: revenue $113.16B, net income $15.41B, net margin 13.6% [XOM-2026-Q3]\n\nNote: XOM is outside the stated 12-equity universe, but a fact sheet for it does exist in the data.",
+    "citations": [
+     "XOM-2026-Q3"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets",
+     "list_tables"
+    ],
+    "seconds": 3.37,
+    "tokens": 3286
+   },
+   {
+    "q": "What was Coca-Cola's net margin in Q2 2026?",
+    "answer": "Coca-Cola's net margin in FY2026 Q2 (quarter ended 2026-07-03) was **33.1%**. [KO-2026-Q2]\n\nFor context, that quarter had revenue of $13.38B and net income of $4.42B. [KO-2026-Q2]",
+    "citations": [
+     "KO-2026-Q2"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets",
+     "list_tables"
+    ],
+    "seconds": 2.6,
+    "tokens": 3255
+   },
+   {
+    "q": "What were Visa's total assets at the end of fiscal year 2026?",
+    "answer": "**Visa's total assets at FY2026 year-end were $94.36 billion** [V-2026-FY], against total liabilities of $58.25 billion and stockholders' equity of $36.11 billion [V-2026-FY].",
+    "citations": [
+     "V-2026-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.32,
+    "tokens": 2544
+   },
+   {
+    "q": "How deep was Meta Platforms' worst drawdown during fiscal 2022?",
+    "answer": "Meta Platforms\u2019 worst drawdown in fiscal 2022 (ended 2022-12-31) was **\u221274.3% from its running high** [META-2022-FY]. The trough was an adjusted close of **$88.07 on 2022-11-03** [sql].",
+    "citations": [
+     "META-2022-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 3,
+    "tool_calls": [
+     "list_tables",
+     "search_fact_sheets",
+     "run_sql"
+    ],
+    "seconds": 5.95,
+    "tokens": 6136
+   },
+   {
+    "q": "Which NVIDIA periods had values restated in a later filing?",
+    "answer": "Two NVIDIA periods are flagged as restated (values differing across filings, e.g. via a 10-K/A or 10-Q/A) [sql]:\n\n| Period | Period end | Filed | Revenue | Net income |\n|---|---|---|---|---|\n| FY2020 Q1 | 2020-04-26 | 2020-05-21 | $3.08B | $917M [NVDA-2020-Q1] |\n| FY2020 Q2 | 2020-07-26 | 2020-08-19 | $3.87B | $622M [NVDA-2020-Q2] |\n\nBoth carry the note \"Values for this period differ across filings (restated\u2026); the latest filing is used\" [NVDA-2020-Q1] [NVDA-2020-Q2]. All other NVDA periods checked (FY2020 Q3/FY, FY2025 Q1, FY2026 Q1\u2013Q2, FY2027 Q1) show \"No restatement detected,\" with `has_restatement = false` in the marts data [sql]. The fact sheets don't quantify the original pre-restatement figures, only that the latest filing's values are used.",
+    "citations": [
+     "NVDA-2020-Q1",
+     "NVDA-2020-Q2"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 5,
+    "tool_calls": [
+     "search_fact_sheets",
+     "list_tables",
+     "run_sql",
+     "search_fact_sheets",
+     "run_sql",
+     "search_fact_sheets"
+    ],
+    "seconds": 8.25,
+    "tokens": 15348
+   },
+   {
+    "q": "Why was Johnson & Johnson's net margin so high in Q3 2023?",
+    "answer": "J&J\u2019s Q3 2023 net margin was **121.9%** because **net income ($26.03B) exceeded revenue ($21.35B)** for the period ended 2023-10-01, producing a roughly **$4.68B gap** [JNJ-2023-Q3] [sql]. Net income was also up **483.8% YoY** [JNJ-2023-Q3].\n\nHowever, the available fact sheet and marts do **not** include the income-statement detail or non-operating items needed to explain the cause; operating income is \u201cnot reported\u201d [JNJ-2023-Q3]. So the data confirms the arithmetic but not the specific reason.",
+    "citations": [
+     "JNJ-2023-Q3"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 4,
+    "tool_calls": [
+     "search_fact_sheets",
+     "list_tables",
+     "search_fact_sheets",
+     "run_sql",
+     "search_fact_sheets"
+    ],
+    "seconds": 9.4,
+    "tokens": 13561
+   },
+   {
+    "q": "How did Alphabet's revenue change year over year in Q2 2026?",
+    "answer": "Alphabet\u2019s Q2 2026 revenue was **$119.80 billion**, up **24.2% year over year** for the quarter ended **2026-06-30** [GOOGL-2026-Q2].",
+    "citations": [
+     "GOOGL-2026-Q2"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 3.04,
+    "tokens": 2892
+   },
+   {
+    "q": "What was Amazon's stockholders' equity at the end of 2025?",
+    "answer": "Amazon\u2019s stockholders\u2019 equity was **$411.06 billion** at the end of fiscal 2025, **December 31, 2025** [AMZN-2025-FY].",
+    "citations": [
+     "AMZN-2025-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.56,
+    "tokens": 2866
+   },
+   {
+    "q": "How volatile was NVIDIA stock during fiscal 2023?",
+    "answer": "NVIDIA's fiscal 2023 (ended 2023-01-29) was highly volatile: measured over 250 trading days, average 20-day annualized volatility was **62.8%**, with a peak of **86.7%**, and the stock fell as much as **-66.3%** from its running high [NVDA-2023-FY].\n\nQuarter-by-quarter (20-day annualized vol, average / peak, and worst drawdown):\n\n| Period | Period end | Avg vol | Peak vol | Worst drawdown |\n|---|---|---|---|---|\n| FY2023 Q1 | 2022-05-01 | 66.2% | 77.4% | -44.8% [NVDA-2023-Q1] |\n| FY2023 Q2 | 2022-07-31 | 68.5% | 86.7% | -56.5% [NVDA-2023-Q2] |\n| FY2023 Q3 | 2022-10-30 | 56.7% | 64.9% | -66.3% [NVDA-2023-Q3] |\n\nSo volatility peaked in Q2 (Aug 2022, ~87% annualized) and the drawdown deepened through the year to a -66% trough.",
+    "citations": [
+     "NVDA-2023-FY",
+     "NVDA-2023-Q1",
+     "NVDA-2023-Q2",
+     "NVDA-2023-Q3"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "list_tables",
+     "search_fact_sheets"
+    ],
+    "seconds": 3.94,
+    "tokens": 3589
+   },
+   {
+    "q": "Compare Apple's and Microsoft's net margin for fiscal year 2026.",
+    "answer": "For fiscal year 2026, **Microsoft\u2019s net margin was higher**:\n\n| Company | FY2026 net margin | Net income / revenue | Period end |\n|---|---:|---|---|\n| Apple | **27.6%** | $132.18B / $478.83B | 2026-09-26 [AAPL-2026-FY] |\n| Microsoft | **40.3%** | $133.75B / $331.84B | 2026-06-30 [MSFT-2026-FY] |\n\nMicrosoft led by **12.7 percentage points**.",
+    "citations": [
+     "AAPL-2026-FY",
+     "MSFT-2026-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets",
+     "search_fact_sheets"
+    ],
+    "seconds": 2.77,
+    "tokens": 3765
+   },
+   {
+    "q": "What revenue did Exxon Mobil report for the first quarter of 2026?",
+    "answer": "Exxon Mobil (XOM) reported revenue of **$85.14 billion** for FY2026 Q1, the quarter ended 2026-03-31 (filed 2026-05-04) [XOM-2026-Q1]. Net income for the same quarter was $4.18 billion, with diluted EPS of $1.00 [XOM-2026-Q1].",
+    "citations": [
+     "XOM-2026-Q1"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets",
+     "list_tables"
+    ],
+    "seconds": 2.52,
+    "tokens": 3294
+   },
+   {
+    "q": "What was Walmart's operating income in Q2 of fiscal 2027?",
+    "answer": "Walmart's operating income in FY2027 Q2 (quarter ended 2026-07-31) was **$9.38 billion**, a 5.0% operating margin on $187.94 billion of revenue [WMT-2027-Q2].",
+    "citations": [
+     "WMT-2027-Q2"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.05,
+    "tokens": 2650
+   },
+   {
+    "q": "What diluted EPS did Coca-Cola earn in fiscal year 2025?",
+    "answer": "Coca-Cola's fiscal year 2025 diluted EPS was **$3.04** (FY2025, period ended 2025-12-31) [KO-2025-FY].\n\nContext from the same period: revenue $47.94B, net income $13.11B, and net margin 27.3% [KO-2025-FY]. No restatement was flagged for the period [KO-2025-FY].",
+    "citations": [
+     "KO-2025-FY"
+    ],
+    "cites_relevant": true,
+    "ungrounded": [],
+    "expect_ok": true,
+    "stopped_by": "final",
+    "steps": 2,
+    "tool_calls": [
+     "search_fact_sheets"
+    ],
+    "seconds": 2.78,
+    "tokens": 2704
+   }
+  ]
+ },
+ "triage": {
+  "correct": 4,
+  "of": 4,
+  "median_seconds_to_note": 28.455,
+  "rows": [
+   {
+    "fault": "api_500",
+    "incident_id": 52,
+    "expected": "upstream_api_outage",
+    "diagnosed": "upstream_api_outage",
+    "correct": true,
+    "stopped_by": "final",
+    "seconds": 40.05,
+    "tool_calls": [
+     "get_incident",
+     "get_failed_runs",
+     "get_recent_runs",
+     "get_task_log",
+     "get_task_log",
+     "get_reconciliation_issues",
+     "get_dbt_failures",
+     "search_runbooks",
+     "get_failed_runs",
+     "get_recent_runs",
+     "search_runbooks",
+     "search_runbooks"
+    ],
+    "note": "incidents/52.md"
+   },
+   {
+    "fault": "schema_change",
+    "incident_id": 64,
+    "expected": "source_schema_drift",
+    "diagnosed": "source_schema_drift",
+    "correct": true,
+    "stopped_by": "final",
+    "seconds": 13.19,
+    "tool_calls": [
+     "get_incident",
+     "get_failed_runs",
+     "get_recent_runs",
+     "get_reconciliation_issues",
+     "get_dbt_failures",
+     "search_runbooks",
+     "get_task_log"
+    ],
+    "note": "incidents/64.md"
+   },
+   {
+    "fault": "duplicate_batch",
+    "incident_id": 24,
+    "expected": "duplicate_load",
+    "diagnosed": "duplicate_load",
+    "correct": true,
+    "stopped_by": "final",
+    "seconds": 45.35,
+    "tool_calls": [
+     "get_incident",
+     "get_reconciliation_issues",
+     "get_failed_runs",
+     "search_runbooks",
+     "get_recent_runs",
+     "get_task_log",
+     "get_failed_runs",
+     "get_task_log",
+     "get_task_log",
+     "search_runbooks",
+     "get_dbt_failures",
+     "get_stream_metrics"
+    ],
+    "note": "incidents/24.md"
+   },
+   {
+    "fault": "stream_stop",
+    "incident_id": 66,
+    "expected": "stream_source_stalled",
+    "diagnosed": "stream_source_stalled",
+    "correct": true,
+    "stopped_by": "final",
+    "seconds": 16.86,
+    "tool_calls": [
+     "get_incident",
+     "get_stream_metrics",
+     "get_stream_metrics",
+     "get_failed_runs",
+     "get_reconciliation_issues",
+     "search_runbooks",
+     "get_dbt_failures",
+     "get_stream_metrics"
+    ],
+    "note": "incidents/66.md"
+   }
+  ],
+  "bonus_real_incidents": [
+   {
+    "incident_id": 6,
+    "diagnosed": "data_freshness",
+    "stopped_by": "final",
+    "seconds": 30.46,
+    "note": "incidents/6.md"
+   },
+   {
+    "incident_id": 18,
+    "diagnosed": "infrastructure",
+    "stopped_by": "final",
+    "seconds": 37.37,
+    "note": "incidents/18.md"
+   },
+   {
+    "incident_id": 21,
+    "diagnosed": "infrastructure",
+    "stopped_by": "final",
+    "seconds": 23.27,
+    "note": "incidents/21.md"
+   },
+   {
+    "incident_id": 47,
+    "diagnosed": "infrastructure",
+    "stopped_by": "blocked_calls",
+    "seconds": 46.09,
+    "note": "incidents/47.md"
+   }
+  ]
+ }
+}
