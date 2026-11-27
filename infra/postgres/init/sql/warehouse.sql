@@ -93,6 +93,9 @@ create table if not exists ops.incident (
     resolved_at       timestamptz
 );
 
+-- The alert's own context (Grafana labels + summary, or the Airflow exception) for the triage agent.
+alter table ops.incident add column if not exists details jsonb;
+
 -- At most one OPEN incident per failed DAG run (dedupes mapped tasks failing together; atomic under concurrency).
 create unique index if not exists incident_open_per_run on ops.incident (dag_id, airflow_run_id)
     where resolved_at is null and airflow_run_id is not null;

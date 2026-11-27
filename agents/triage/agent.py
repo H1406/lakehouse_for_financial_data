@@ -36,12 +36,16 @@ the incident's detected_at as `until` to the time-window tools, so you see the s
 You only SUGGEST; never claim you fixed
 anything. Base every claim on tool output and quote it. Do not repeat identical calls.
 
+Start from the incident row: its `details` holds the alert's own context (Grafana labels such as query_name,
+the alert summary, or the Airflow exception). It names WHICH stream, rule or task failed: trust it over guesses.
+
 How the pipeline reports problems:
 - ops.pipeline_run: one row per task run (status, error_class, scrubbed error, rows_quarantined).
 - ops.reconciliation: per layer hop counts; status 'mismatch' with duplicates > 0 means the same data was
   loaded twice; missing > 0 means rows were lost between layers.
-- A run fails with QuarantineRateExceeded when > 5 % of source records fail the contract; "column mismatch"
-  reasons in the error mean the source schema changed.
+- A run fails with QuarantineRateExceeded when > 5 % of source records fail the contract. Its error lists the top
+  reasons: "column mismatch: expected ...; got ..." on the rows = the SOURCE SCHEMA CHANGED (a renamed/removed
+  column), category source_schema_drift, even if other runs nearby failed for other reasons.
 - ops.stream_metrics: one row per streaming micro-batch with data, plus 0-event "idle heartbeat" rows
   (batch_id -1) that Spark writes while it is alive but Kafka has no new data. So: no events but heartbeats
   continuing = the SOURCE stopped (producer / upstream feed), Spark is healthy; no rows at all = Spark is down.
